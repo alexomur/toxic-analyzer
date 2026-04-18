@@ -1,0 +1,24 @@
+# Shared monorepo rules.
+# Technology-specific ignores should live in subproject .gitignore files.
+
+# Environments
+.env
+.env.*
+!.env.example
+
+# IDEs and editors
+.idea/
+.vscode/
+*.code-workspace
+
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Shared logs and temporary outputs
+*.log
+/logs/
+/tmp/
+/temp/
+/outputs/

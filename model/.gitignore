@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.hypothesis/
+
+# Jupyter
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# Model data and artifacts
+data/*
+!data/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
+checkpoints/*
+!checkpoints/.gitkeep
+runs/
+wandb/
+mlruns/
+outputs/
+
+# Common ML outputs
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.bin
+*.joblib
+*.pkl
