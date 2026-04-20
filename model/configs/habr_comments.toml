@@ -1,0 +1,20 @@
+[source]
+repo_id = "IlyaGusev/habr"
+repo_type = "dataset"
+remote_pattern = "data/train-*.parquet"
+article_batch_size = 64
+max_shards = 0
+
+[output]
+prepared_jsonl = "data/processed/habr_comments_russian_annotation_pool.jsonl"
+report_json = "artifacts/habr_comments_preparation_report.json"
+dedup_sqlite = "artifacts/habr_comments_dedup.sqlite3"
+progress_json = "artifacts/habr_comments_preparation_progress.json"
+
+[filters]
+min_cyrillic_letters = 3
+strict_cyrillic_ratio = 0.55
+mixed_cyrillic_ratio = 0.35
+short_comment_cyrillic_ratio = 0.85
+min_short_comment_letters = 4
+min_meaningful_words = 1
