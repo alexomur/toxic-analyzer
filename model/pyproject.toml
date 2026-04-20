@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 prepare-habr-comments = "toxic_analyzer.prepare_habr_comments:main"
 build-habr-annotation-compact-db = "toxic_analyzer.build_habr_annotation_compact_db:main"
+build-mixed-toxic-dataset = "toxic_analyzer.build_mixed_toxic_dataset:main"
 
 [project.optional-dependencies]
 dev = [
