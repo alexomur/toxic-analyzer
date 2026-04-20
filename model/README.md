@@ -76,43 +76,28 @@ Jupyter Notebook используется как лаборатория: для 
 - `data/processed/habr_comments_russian_annotation_pool.jsonl` — очищенные русские комментарии, пригодные для разметки;
 - `artifacts/habr_comments_preparation_report.json` — сводка по количеству статей, комментариев и причин отбраковки.
 
-## Подготовительная база следующего уровня
+### Компактная база для разметки только по тексту комментария
 
-Следующий шаг после большого `jsonl` — локальная SQLite-база, в которой каждая запись уже удобна для постепенной
-разметки человеком или ИИ. Для этого в проекте добавлен модуль `toxic_analyzer.build_habr_annotation_db`.
-
-База создаётся в `data/processed/habr_comments_annotation_v2.sqlite3` и хранит по каждой записи:
-
-- идентификаторы источника: `article_id`, `comment_id`, `parent_comment_id`;
-- минимальный контекст: `article_title`, `article_url`, `parent_clean_text`;
-- основной текст: `raw_text`, `clean_text`;
-- готовое поле `annotation_context`, собранное из статьи, родительского комментария и самого комментария;
-- служебные поля для разметки: `annotation_status`, `toxic_label`, `label_confidence`, `annotation_notes`;
-- quality flags: `is_russian`, `is_mostly_code`, `is_low_content`, `is_annotation_ready`.
-
-Автор комментария в новую базу намеренно не переносится: для разметки токсичности он не нужен, зато может вносить
-лишний bias.
-
-### Зачем нужен `annotation_context`
-
-Одного текста комментария не всегда достаточно для уверенной разметки. Поэтому в базу сразу записывается
-`annotation_context`:
-
-- `Статья: ...`
-- `Родительский комментарий: ...` если он есть
-- `Комментарий: ...`
-
-Это поле удобно и для ручной разметки, и для будущего AI-assisted labeling.
-
-### Запуск сборки SQLite-базы
+Если нужен минимальный SQLite-слой без контекста статьи, времён публикации и прочих source-level полей,
+можно собрать отдельную компактную базу напрямую из очищенного `jsonl`:
 
 ```bash
 python -m pip install -e .
-build-habr-annotation-db --rebuild
+build-habr-annotation-compact-db --rebuild
 ```
 
-Скрипт берёт текущий `jsonl`, собирает SQLite-базу и создаёт view `annotation_queue` для комментариев,
-которые готовы к разметке и ещё имеют статус `pending`.
+По умолчанию скрипт читает `data/processed/habr_comments_russian_annotation_pool.jsonl` и создаёт
+`data/processed/habr_comments_annotation_compact.sqlite3` со схемой:
+
+- `id`
+- `comment_id`
+- `habr_score`
+- `raw_text`
+- `toxic_label`
+- `label_status`
+
+При такой миграции `toxic_label` намеренно сбрасывается в `NULL`, а статусы сводятся к минимальной схеме:
+записи с `is_annotation_ready = true` получают `pending`, остальные `excluded`.
 
 ### Запуск
 
