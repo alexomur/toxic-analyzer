@@ -10,7 +10,8 @@ from typing import Callable, Sequence
 from toxic_analyzer.baseline_model import ToxicityBaselineModel, ToxicityPrediction
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model.pkl"
+DEFAULT_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model_v2.pkl"
+LEGACY_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model.pkl"
 EXIT_COMMANDS = {"exit", "quit", "q", "выход"}
 
 
@@ -41,6 +42,8 @@ def sanitize_text(text: str) -> str:
 
 def load_model(model_path: Path) -> ToxicityBaselineModel:
     resolved_path = model_path.resolve()
+    if not resolved_path.exists() and resolved_path == DEFAULT_MODEL_PATH.resolve():
+        resolved_path = LEGACY_MODEL_PATH.resolve()
     if not resolved_path.exists():
         raise SystemExit(
             "Файл модели не найден. Сначала обучите baseline командой `train-baseline` "

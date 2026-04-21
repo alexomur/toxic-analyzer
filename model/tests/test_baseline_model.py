@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from toxic_analyzer.baseline_model import (
     ToxicityBaselineModel,
     train_baseline_model,
 )
+from toxic_analyzer.hard_case_dataset import load_hard_case_dataset
 
 
 def build_training_db(path: Path) -> None:
@@ -102,3 +104,82 @@ def test_baseline_model_roundtrip_preserves_predictions(tmp_path: Path) -> None:
     reloaded = restored.predict_one("полезный и спокойный комментарий")
 
     assert original.to_dict() == reloaded.to_dict()
+
+
+def test_train_baseline_model_reports_hard_case_metrics(tmp_path: Path) -> None:
+    dataset_path = tmp_path / "mixed.sqlite3"
+    build_training_db(dataset_path)
+    hard_case_path = tmp_path / "hard_cases.jsonl"
+    hard_case_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {"text": "ты мерзкий идиот", "label": 1, "tags": ["targeted_insult"]},
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {"text": "Он неплохо справляется!", "label": 0, "tags": ["benign"]},
+                    ensure_ascii=False,
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    bundle = create_dataset_bundle(dataset_path=dataset_path, random_seed=17)
+    hard_case_dataset = load_hard_case_dataset(hard_case_path)
+
+    _, report = train_baseline_model(
+        bundle,
+        config=BaselineTrainingConfig(
+            random_seed=17,
+            min_df=1,
+            max_word_features=500,
+            max_char_features=500,
+            select_k_best=200,
+            threshold_grid_size=41,
+            calibration_method="sigmoid",
+        ),
+        hard_case_dataset=hard_case_dataset,
+    )
+
+    assert "hard_cases" in report
+    assert report["hard_cases"]["summary"]["rows"] == 2
+    assert "targeted_insult" in report["hard_cases"]["per_tag"]
+
+
+def test_train_baseline_model_reports_seed_dataset_summary(tmp_path: Path) -> None:
+    dataset_path = tmp_path / "mixed.sqlite3"
+    build_training_db(dataset_path)
+    seed_path = tmp_path / "seed.jsonl"
+    seed_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {"text": "ты чудище", "label": 1, "tags": ["seed"]},
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {"text": "это плохой код", "label": 0, "tags": ["seed"]},
+                    ensure_ascii=False,
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    bundle = create_dataset_bundle(dataset_path=dataset_path, random_seed=19)
+    seed_dataset = load_hard_case_dataset(seed_path)
+
+    _, report = train_baseline_model(
+        bundle,
+        config=BaselineTrainingConfig(
+            random_seed=19,
+            min_df=1,
+            max_word_features=500,
+            max_char_features=500,
+            select_k_best=200,
+            threshold_grid_size=41,
+        ),
+        seed_dataset=seed_dataset,
+    )
+
+    assert report["seed_dataset"]["rows"] == 2

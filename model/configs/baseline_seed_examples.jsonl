@@ -1,0 +1,16 @@
+{"text":"поплачь еще","label":1,"tags":["seed","dismissive_imperative"]}
+{"text":"иди отсюда нафиг","label":1,"tags":["seed","dismissive_imperative"]}
+{"text":"тебя спросить забыли вообще","label":1,"tags":["seed","dismissive_template"]}
+{"text":"геев спросить забыли","label":1,"tags":["seed","identity_targeting"]}
+{"text":"ты просто чудище","label":1,"tags":["seed","targeted_insult"]}
+{"text":"вы жалкое чудище","label":1,"tags":["seed","targeted_insult"]}
+{"text":"ты плохой человек","label":1,"tags":["seed","targeted_insult"]}
+{"text":"мне похуй, что ты пишешь","label":1,"tags":["seed","profanity_with_target"]}
+{"text":"заткнись уже наконец","label":1,"tags":["seed","dismissive_imperative"]}
+{"text":"съебал отсюда","label":1,"tags":["seed","dismissive_imperative"]}
+{"text":"он справляется нормально","label":0,"tags":["seed","benign"]}
+{"text":"да, конечно, давайте обсудим спокойно","label":0,"tags":["seed","benign"]}
+{"text":"это плохой код, но мы его исправим","label":0,"tags":["seed","criticism"]}
+{"text":"чудище было героем сказки","label":0,"tags":["seed","polysemy"]}
+{"text":"как мне похуй на этот баг, но я все равно починю","label":0,"tags":["seed","profanity_without_target"]}
+{"text":"вы плохо подготовили отчет, его надо доработать","label":0,"tags":["seed","criticism"]}

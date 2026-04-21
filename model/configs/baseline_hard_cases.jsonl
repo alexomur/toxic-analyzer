@@ -1,0 +1,20 @@
+{"text":"Он неплохо справляется!","label":0,"tags":["benign","short_text"]}
+{"text":"Да, конечно","label":0,"tags":["benign","short_text","context_dependent"]}
+{"text":"Это плохой код","label":0,"tags":["benign","criticism"]}
+{"text":"Чудище из старой сказки","label":0,"tags":["benign","polysemy"]}
+{"text":"Как мне похуй на этот баг","label":0,"tags":["benign","profanity_without_target"]}
+{"text":"Вы плохо подготовили доклад","label":0,"tags":["benign","criticism","second_person"]}
+{"text":"поплачь об этом","label":1,"tags":["implicit_toxicity","dismissive_imperative","short_text"]}
+{"text":"иди нафиг","label":1,"tags":["implicit_toxicity","dismissive_imperative","short_text"]}
+{"text":"Если бы ты знал, как мне похуй","label":1,"tags":["implicit_toxicity","profanity_with_target"]}
+{"text":"Гея спросить забыли","label":1,"tags":["identity_targeting","dismissive_template","short_text"]}
+{"text":"пидора спросить забыли","label":1,"tags":["slur","dismissive_template","short_text"]}
+{"text":"ты плохой","label":1,"tags":["targeted_insult","short_text"]}
+{"text":"вы плохой","label":1,"tags":["targeted_insult","short_text","second_person"]}
+{"text":"съебал","label":1,"tags":["dismissive_imperative","profanity","short_text"]}
+{"text":"чудище","label":0,"tags":["polysemy","short_text"]}
+{"text":"Ты чудище","label":1,"tags":["targeted_insult","short_text"]}
+{"text":"Вы чудище","label":1,"tags":["targeted_insult","short_text","second_person"]}
+{"text":"заткнись уже","label":1,"tags":["dismissive_imperative","short_text"]}
+{"text":"мне похуй, что ты думаешь","label":1,"tags":["implicit_toxicity","profanity_with_target"]}
+{"text":"тебя спросить забыли","label":1,"tags":["dismissive_template","short_text"]}

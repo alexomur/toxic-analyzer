@@ -10,10 +10,13 @@ from typing import Sequence
 
 from toxic_analyzer.baseline_data import DEFAULT_MIXED_DATASET_PATH, create_dataset_bundle
 from toxic_analyzer.baseline_model import BaselineTrainingConfig, train_baseline_model
+from toxic_analyzer.hard_case_dataset import load_hard_case_dataset
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_model.pkl"
-DEFAULT_REPORT_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_training_report.json"
+DEFAULT_MODEL_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_model_v2.pkl"
+DEFAULT_REPORT_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_training_report_v2.json"
+DEFAULT_HARD_CASE_DATASET_PATH = ROOT_DIR / "configs" / "baseline_hard_cases.jsonl"
+DEFAULT_SEED_DATASET_PATH = ROOT_DIR / "configs" / "baseline_seed_examples.jsonl"
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -32,6 +35,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-char-features", type=int, default=150_000)
     parser.add_argument("--select-k-best", type=int, default=120_000)
     parser.add_argument("--threshold-grid-size", type=int, default=181)
+    parser.add_argument("--calibration-method", choices=["sigmoid", "isotonic"], default="sigmoid")
+    parser.add_argument("--no-expert-features", action="store_true")
+    parser.add_argument("--hard-case-dataset", type=Path, default=DEFAULT_HARD_CASE_DATASET_PATH)
+    parser.add_argument("--seed-dataset", type=Path, default=DEFAULT_SEED_DATASET_PATH)
     return parser.parse_args(argv)
 
 
@@ -53,8 +60,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         max_char_features=int(args.max_char_features) or None,
         select_k_best=int(args.select_k_best),
         threshold_grid_size=int(args.threshold_grid_size),
+        use_expert_features=not bool(args.no_expert_features),
+        calibration_method=str(args.calibration_method),
     )
-    model, report = train_baseline_model(dataset_bundle, config=config)
+    hard_case_path = args.hard_case_dataset.resolve()
+    hard_case_dataset = load_hard_case_dataset(hard_case_path) if hard_case_path.exists() else None
+    seed_path = args.seed_dataset.resolve()
+    seed_dataset = load_hard_case_dataset(seed_path) if seed_path.exists() else None
+    model, report = train_baseline_model(
+        dataset_bundle,
+        config=config,
+        hard_case_dataset=hard_case_dataset,
+        seed_dataset=seed_dataset,
+    )
 
     model_output = args.model_output.resolve()
     report_output = args.report_output.resolve()
@@ -74,6 +92,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"recall={test_metrics['recall']:.4f}",
         flush=True,
     )
+    if "hard_cases" in report:
+        hard_case_metrics = report["hard_cases"]["overall"]
+        print(
+            "[train-baseline] Hard cases: "
+            f"f1={hard_case_metrics['f1']:.4f} "
+            f"precision={hard_case_metrics['precision']:.4f} "
+            f"recall={hard_case_metrics['recall']:.4f}",
+            flush=True,
+        )
+    if "seed_dataset" in report:
+        print(
+            f"[train-baseline] Seed examples: rows={report['seed_dataset']['rows']}",
+            flush=True,
+        )
     print(f"[train-baseline] Model: {model_output}", flush=True)
     print(f"[train-baseline] Report: {report_output}", flush=True)
     return 0

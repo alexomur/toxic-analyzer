@@ -11,7 +11,8 @@ from typing import Sequence
 from toxic_analyzer.baseline_model import ToxicityBaselineModel
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model.pkl"
+DEFAULT_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model_v2.pkl"
+LEGACY_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model.pkl"
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -32,7 +33,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not texts:
         raise SystemExit("Provide at least one --text value or pass input via --stdin.")
 
-    model = ToxicityBaselineModel.load(args.model_path.resolve())
+    model_path = args.model_path.resolve()
+    if not model_path.exists() and model_path == DEFAULT_MODEL_PATH.resolve():
+        model_path = LEGACY_MODEL_PATH.resolve()
+    model = ToxicityBaselineModel.load(model_path)
     predictions = [prediction.to_dict() for prediction in model.predict(texts)]
     payload: dict[str, object]
     if len(predictions) == 1:

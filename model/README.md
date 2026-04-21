@@ -87,6 +87,9 @@ Jupyter Notebook используется как лаборатория: для 
 - `LogisticRegression`;
 - калибровка `score` через validation split.
 
+Подробная история эволюции baseline, различия между V1 и V2, реальные трудности модели и инженерные выводы
+вынесены в отдельный документ [MODEL_EVOLUTION.md](C:/Users/Alexomur/Desktop/projects/toxic-analyzer/model/MODEL_EVOLUTION.md).
+
 ### Запуск обучения baseline
 
 Из каталога `model/`:
@@ -99,8 +102,8 @@ train-baseline
 По умолчанию команда:
 
 - читает `data/processed/mixed_toxic_comments.sqlite3`;
-- сохраняет модель в `artifacts/baseline_model.pkl`;
-- сохраняет отчёт с метриками в `artifacts/baseline_training_report.json`.
+- сохраняет модель в `artifacts/baseline_model_v2.pkl`;
+- сохраняет отчёт с метриками в `artifacts/baseline_training_report_v2.json`.
 
 ### Запуск инференса baseline
 
@@ -109,6 +112,7 @@ predict-baseline --text "ты ведёшь себя как идиот"
 ```
 
 Команда печатает JSON с `label`, `score` и `toxic_probability`.
+По умолчанию используется `artifacts/baseline_model_v2.pkl`.
 
 ### Отдельный пользовательский скрипт
 
@@ -119,6 +123,7 @@ ask-baseline "ты ведёшь себя как идиот"
 ```
 
 Если запустить `ask-baseline` без параметров, команда перейдёт в интерактивный режим и будет читать фразы из консоли до пустой строки или `exit`.
+По умолчанию используется `artifacts/baseline_model_v2.pkl`.
 
 ## Подготовка комментариев Habr
 
