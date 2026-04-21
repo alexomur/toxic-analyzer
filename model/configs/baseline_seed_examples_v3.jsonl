@@ -1,0 +1,33 @@
+{"text":"смэрть им","label":1,"tags":["seed_v3","targeted_harm","misspelling"]}
+{"text":"смэрть вам","label":1,"tags":["seed_v3","targeted_harm","misspelling"]}
+{"text":"смэрть геям","label":1,"tags":["seed_v3","targeted_harm","misspelling","group_targeting"]}
+{"text":"смэрть фашситам","label":1,"tags":["seed_v3","targeted_harm","misspelling","group_targeting"]}
+{"text":"смерть вам всем","label":1,"tags":["seed_v3","targeted_harm"]}
+{"text":"смерть этим уродам","label":1,"tags":["seed_v3","targeted_harm"]}
+{"text":"поплач","label":1,"tags":["seed_v3","dismissive_imperative","misspelling"]}
+{"text":"поплач об этом","label":1,"tags":["seed_v3","dismissive_imperative","misspelling"]}
+{"text":"поплач ещё","label":1,"tags":["seed_v3","dismissive_imperative","misspelling"]}
+{"text":"поплач немного","label":1,"tags":["seed_v3","dismissive_imperative","misspelling"]}
+{"text":"поплачь","label":1,"tags":["seed_v3","dismissive_imperative"]}
+{"text":"заткнис уже","label":1,"tags":["seed_v3","dismissive_imperative","misspelling"]}
+{"text":"иди нафег","label":1,"tags":["seed_v3","dismissive_imperative","misspelling"]}
+{"text":"он не тупой","label":0,"tags":["seed_v3","negated_insult"]}
+{"text":"ты не тупой","label":0,"tags":["seed_v3","negated_insult","second_person"]}
+{"text":"ты совсем не тупой","label":0,"tags":["seed_v3","negated_insult","second_person"]}
+{"text":"ты вообще не тупой","label":0,"tags":["seed_v3","negated_insult","second_person"]}
+{"text":"ты не тупой человек","label":0,"tags":["seed_v3","negated_insult","second_person"]}
+{"text":"совсем не тупой человек","label":0,"tags":["seed_v3","negated_insult"]}
+{"text":"вовсе не тупой ответ","label":0,"tags":["seed_v3","negated_insult"]}
+{"text":"не тупой, а уставший","label":0,"tags":["seed_v3","negated_insult"]}
+{"text":"смерть это плохо","label":0,"tags":["seed_v3","harm_topic_without_target"]}
+{"text":"смерть не выход","label":0,"tags":["seed_v3","harm_topic_without_target"]}
+{"text":"смерть это страшно","label":0,"tags":["seed_v3","harm_topic_without_target"]}
+{"text":"смерть близкого человека","label":0,"tags":["seed_v3","harm_topic_without_target"]}
+{"text":"после смерти героя","label":0,"tags":["seed_v3","harm_topic_without_target"]}
+{"text":"пожелания смерти это мерзость","label":0,"tags":["seed_v3","harm_topic_without_target"]}
+{"text":"о смерти говорить тяжело","label":0,"tags":["seed_v3","harm_topic_without_target"]}
+{"text":"смэрть","label":0,"tags":["seed_v3","harm_topic_without_target","misspelling","short_text"]}
+{"text":"смэрть это страшное слово","label":0,"tags":["seed_v3","harm_topic_without_target","misspelling"]}
+{"text":"смэрть и жизнь в литературе","label":0,"tags":["seed_v3","harm_topic_without_target","misspelling"]}
+{"text":"поплачем вместе","label":0,"tags":["seed_v3","benign_poplach"]}
+{"text":"поплачу и успокоюсь","label":0,"tags":["seed_v3","benign_poplach"]}

@@ -26,7 +26,7 @@ from sklearn.metrics import (
 from sklearn.pipeline import FeatureUnion, Pipeline
 
 from toxic_analyzer.baseline_data import DatasetBundle, DatasetSplit
-from toxic_analyzer.baseline_features import ExpertFeatureTransformer
+from toxic_analyzer.baseline_features import FEATURE_NAMES, ExpertFeatureTransformer
 from toxic_analyzer.hard_case_dataset import HardCaseDataset
 
 
@@ -70,10 +70,50 @@ class ToxicityBaselineModel:
     threshold: float
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def _supports_v3_adjustments(self) -> bool:
+        return str(self.metadata.get("model_version", "")).lower() == "v3"
+
+    def _apply_v3_probability_adjustments(
+        self,
+        texts: Sequence[str],
+        probabilities: np.ndarray,
+    ) -> np.ndarray:
+        transformer = ExpertFeatureTransformer()
+        feature_index = {name: index for index, name in enumerate(FEATURE_NAMES)}
+        feature_matrix = transformer.transform(texts).toarray()
+        adjusted = probabilities.astype(float, copy=True)
+        for row_index, feature_row in enumerate(feature_matrix):
+            token_count = float(feature_row[feature_index["token_count"]])
+            has_untargeted_harm = bool(feature_row[feature_index["has_untargeted_harm"]])
+            has_targeted_harm = bool(feature_row[feature_index["has_targeted_harm"]])
+            has_second_person_negated_insult = bool(
+                feature_row[feature_index["has_second_person_negated_insult"]]
+            )
+            has_pronoun_insult = bool(feature_row[feature_index["has_pronoun_insult"]])
+            strong_insult_count = float(feature_row[feature_index["strong_insult_count"]])
+            profane_count = float(feature_row[feature_index["profane_count"]])
+
+            if has_untargeted_harm and not has_targeted_harm and token_count <= 4:
+                adjusted[row_index] -= 0.18
+                if token_count <= 1:
+                    adjusted[row_index] -= 0.18
+
+            if (
+                has_second_person_negated_insult
+                and not has_pronoun_insult
+                and strong_insult_count == 0.0
+                and profane_count == 0.0
+            ):
+                adjusted[row_index] -= 0.35
+
+        return np.clip(adjusted, 0.0, 1.0)
+
     def predict_toxic_probabilities(self, texts: Sequence[str]) -> list[float]:
         raw_probabilities = self.pipeline.predict_proba(list(texts))[:, 1]
         calibrated = self.calibrator.predict(raw_probabilities)
         clipped = np.clip(calibrated, 0.0, 1.0)
+        if self._supports_v3_adjustments():
+            clipped = self._apply_v3_probability_adjustments(texts, clipped)
         return [float(value) for value in clipped]
 
     def predict(self, texts: Sequence[str]) -> list[ToxicityPrediction]:
@@ -207,17 +247,29 @@ def build_baseline_pipeline(config: BaselineTrainingConfig) -> Pipeline:
         sublinear_tf=True,
         max_features=config.max_char_features,
     )
-    features = FeatureUnion(
+    text_features = FeatureUnion(
         [
             ("word_tfidf", word_vectorizer),
             ("char_tfidf", char_vectorizer),
         ]
     )
-    if config.use_expert_features:
-        features.transformer_list.append(("expert_features", ExpertFeatureTransformer()))
-    steps: list[tuple[str, Any]] = [("features", features)]
+    selected_text_features: Any = text_features
     if config.select_k_best > 0:
-        steps.append(("select_k_best", SelectKBest(score_func=chi2, k=config.select_k_best)))
+        selected_text_features = Pipeline(
+            [
+                ("tfidf_features", text_features),
+                ("select_k_best", SelectKBest(score_func=chi2, k=config.select_k_best)),
+            ]
+        )
+    feature_blocks: list[tuple[str, Any]] = [("selected_text_features", selected_text_features)]
+    if config.use_expert_features:
+        feature_blocks.append(("expert_features", ExpertFeatureTransformer()))
+    features: Any
+    if len(feature_blocks) == 1:
+        features = selected_text_features
+    else:
+        features = FeatureUnion(feature_blocks)
+    steps: list[tuple[str, Any]] = [("features", features)]
     steps.append(
         (
             "classifier",
@@ -395,6 +447,16 @@ def train_baseline_model(
             "training_config": training_config.to_summary(),
             "threshold_selection": threshold_info,
             "calibration_method": calibrator.method_name,
+            "model_version": "v3",
+            "posthoc_adjustments": {
+                "short_untargeted_harm": {
+                    "base_delta": -0.18,
+                    "single_token_extra_delta": -0.18,
+                },
+                "second_person_negated_insult": {
+                    "delta": -0.35,
+                },
+            },
         },
     )
     report = {
@@ -402,6 +464,8 @@ def train_baseline_model(
         "training_config": training_config.to_summary(),
         "threshold_selection": threshold_info,
         "calibration_method": calibrator.method_name,
+        "model_version": "v3",
+        "posthoc_adjustments": model.metadata["posthoc_adjustments"],
         "metrics": {
             "train": compute_split_metrics(dataset_bundle.train, model),
             "validation": compute_split_metrics(dataset_bundle.validation, model),

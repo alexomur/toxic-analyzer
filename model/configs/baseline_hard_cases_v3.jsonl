@@ -1,0 +1,27 @@
+{"text":"смерть это плохо","label":0,"tags":["hard_v3","harm_topic_without_target","short_text"]}
+{"text":"смерть не выход","label":0,"tags":["hard_v3","harm_topic_without_target","short_text"]}
+{"text":"страх смерти","label":0,"tags":["hard_v3","harm_topic_without_target","short_text"]}
+{"text":"тема смерти тяжёлая","label":0,"tags":["hard_v3","harm_topic_without_target"]}
+{"text":"смэрть и жизнь","label":0,"tags":["hard_v3","harm_topic_without_target","misspelling","short_text"]}
+{"text":"смэрть","label":0,"tags":["hard_v3","harm_topic_without_target","misspelling","short_text"]}
+{"text":"он вовсе не тупой","label":0,"tags":["hard_v3","negated_insult"]}
+{"text":"ты не тупой","label":0,"tags":["hard_v3","negated_insult","second_person","short_text"]}
+{"text":"ты совсем не тупой","label":0,"tags":["hard_v3","negated_insult","second_person"]}
+{"text":"не тупой же вопрос","label":0,"tags":["hard_v3","negated_insult"]}
+{"text":"он не тупой человек","label":0,"tags":["hard_v3","negated_insult"]}
+{"text":"поплачем потом вместе","label":0,"tags":["hard_v3","benign_poplach"]}
+{"text":"поплачу и пойду дальше","label":0,"tags":["hard_v3","benign_poplach"]}
+{"text":"смерть им","label":1,"tags":["hard_v3","targeted_harm","short_text"]}
+{"text":"смерть вам","label":1,"tags":["hard_v3","targeted_harm","short_text"]}
+{"text":"смерть геям","label":1,"tags":["hard_v3","targeted_harm","group_targeting","short_text"]}
+{"text":"смерть фашистам","label":1,"tags":["hard_v3","targeted_harm","group_targeting","short_text"]}
+{"text":"смэрть им","label":1,"tags":["hard_v3","targeted_harm","misspelling","short_text"]}
+{"text":"смэрть вам","label":1,"tags":["hard_v3","targeted_harm","misspelling","short_text"]}
+{"text":"смэрть геям","label":1,"tags":["hard_v3","targeted_harm","misspelling","group_targeting","short_text"]}
+{"text":"смэрть фашситам","label":1,"tags":["hard_v3","targeted_harm","misspelling","group_targeting","short_text"]}
+{"text":"поплач","label":1,"tags":["hard_v3","dismissive_imperative","misspelling","short_text"]}
+{"text":"поплач об этом","label":1,"tags":["hard_v3","dismissive_imperative","misspelling","short_text"]}
+{"text":"поплачь","label":1,"tags":["hard_v3","dismissive_imperative","short_text"]}
+{"text":"поплач ещё","label":1,"tags":["hard_v3","dismissive_imperative","misspelling","short_text"]}
+{"text":"иди нафег","label":1,"tags":["hard_v3","dismissive_imperative","misspelling","short_text"]}
+{"text":"заткнис уже","label":1,"tags":["hard_v3","dismissive_imperative","misspelling","short_text"]}

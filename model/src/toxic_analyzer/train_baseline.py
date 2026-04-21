@@ -13,10 +13,10 @@ from toxic_analyzer.baseline_model import BaselineTrainingConfig, train_baseline
 from toxic_analyzer.hard_case_dataset import load_hard_case_dataset
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_model_v2.pkl"
-DEFAULT_REPORT_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_training_report_v2.json"
-DEFAULT_HARD_CASE_DATASET_PATH = ROOT_DIR / "configs" / "baseline_hard_cases.jsonl"
-DEFAULT_SEED_DATASET_PATH = ROOT_DIR / "configs" / "baseline_seed_examples.jsonl"
+DEFAULT_MODEL_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_model_v3.pkl"
+DEFAULT_REPORT_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_training_report_v3.json"
+DEFAULT_HARD_CASE_DATASET_PATH = ROOT_DIR / "configs" / "baseline_hard_cases_v3.jsonl"
+DEFAULT_SEED_DATASET_PATH = ROOT_DIR / "configs" / "baseline_seed_examples_v3.jsonl"
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:

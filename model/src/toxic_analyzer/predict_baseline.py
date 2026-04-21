@@ -11,8 +11,11 @@ from typing import Sequence
 from toxic_analyzer.baseline_model import ToxicityBaselineModel
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model_v2.pkl"
-LEGACY_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model.pkl"
+DEFAULT_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model_v3.pkl"
+FALLBACK_MODEL_PATHS = [
+    ROOT_DIR / "artifacts" / "baseline_model_v2.pkl",
+    ROOT_DIR / "artifacts" / "baseline_model.pkl",
+]
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -35,7 +38,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     model_path = args.model_path.resolve()
     if not model_path.exists() and model_path == DEFAULT_MODEL_PATH.resolve():
-        model_path = LEGACY_MODEL_PATH.resolve()
+        for fallback_path in FALLBACK_MODEL_PATHS:
+            if fallback_path.resolve().exists():
+                model_path = fallback_path.resolve()
+                break
     model = ToxicityBaselineModel.load(model_path)
     predictions = [prediction.to_dict() for prediction in model.predict(texts)]
     payload: dict[str, object]
