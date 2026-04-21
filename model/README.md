@@ -102,8 +102,8 @@ train-baseline
 По умолчанию команда:
 
 - читает `data/processed/mixed_toxic_comments.sqlite3`;
-- сохраняет модель в `artifacts/baseline_model_v3.pkl`;
-- сохраняет отчёт с метриками в `artifacts/baseline_training_report_v3.json`;
+- сохраняет модель в `artifacts/baseline_model_v3_2.pkl`;
+- сохраняет отчёт с метриками в `artifacts/baseline_training_report_v3_2.json`;
 - использует `configs/baseline_seed_examples_v3.jsonl` и `configs/baseline_hard_cases_v3.jsonl`.
 
 ### Запуск инференса baseline
@@ -113,7 +113,7 @@ predict-baseline --text "ты ведёшь себя как идиот"
 ```
 
 Команда печатает JSON с `label`, `score` и `toxic_probability`.
-По умолчанию используется `artifacts/baseline_model_v3.pkl`.
+По умолчанию используется `artifacts/baseline_model_v3_2.pkl`.
 
 ### Отдельный пользовательский скрипт
 
@@ -124,7 +124,7 @@ ask-baseline "ты ведёшь себя как идиот"
 ```
 
 Если запустить `ask-baseline` без параметров, команда перейдёт в интерактивный режим и будет читать фразы из консоли до пустой строки или `exit`.
-По умолчанию используется `artifacts/baseline_model_v3.pkl`.
+По умолчанию используется `artifacts/baseline_model_v3_2.pkl`.
 
 ## Подготовка комментариев Habr
 

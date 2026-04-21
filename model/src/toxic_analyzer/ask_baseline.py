@@ -10,8 +10,10 @@ from typing import Callable, Sequence
 from toxic_analyzer.baseline_model import ToxicityBaselineModel, ToxicityPrediction
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model_v3.pkl"
+DEFAULT_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model_v3_2.pkl"
 FALLBACK_MODEL_PATHS = [
+    ROOT_DIR / "artifacts" / "baseline_model_v3_1.pkl",
+    ROOT_DIR / "artifacts" / "baseline_model_v3.pkl",
     ROOT_DIR / "artifacts" / "baseline_model_v2.pkl",
     ROOT_DIR / "artifacts" / "baseline_model.pkl",
 ]

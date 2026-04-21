@@ -71,7 +71,7 @@ class ToxicityBaselineModel:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def _supports_v3_adjustments(self) -> bool:
-        return str(self.metadata.get("model_version", "")).lower() == "v3"
+        return str(self.metadata.get("model_version", "")).lower() in {"v3", "v3.1", "v3.2"}
 
     def _apply_v3_probability_adjustments(
         self,
@@ -447,7 +447,7 @@ def train_baseline_model(
             "training_config": training_config.to_summary(),
             "threshold_selection": threshold_info,
             "calibration_method": calibrator.method_name,
-            "model_version": "v3",
+            "model_version": "v3.2",
             "posthoc_adjustments": {
                 "short_untargeted_harm": {
                     "base_delta": -0.18,
@@ -464,7 +464,7 @@ def train_baseline_model(
         "training_config": training_config.to_summary(),
         "threshold_selection": threshold_info,
         "calibration_method": calibrator.method_name,
-        "model_version": "v3",
+        "model_version": "v3.2",
         "posthoc_adjustments": model.metadata["posthoc_adjustments"],
         "metrics": {
             "train": compute_split_metrics(dataset_bundle.train, model),
