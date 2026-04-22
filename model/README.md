@@ -57,7 +57,10 @@ Jupyter Notebook используется как лаборатория: для 
 ## Целевой домен и основной датасет
 
 Целевой домен модели — смешанный русскоязычный UGC, а не отдельный источник вроде `Habr`.
-Для baseline-разработки используется общий размеченный набор `data/processed/mixed_toxic_comments.sqlite3`.
+Для baseline-разработки используется общий размеченный набор, но с этого этапа `PostgreSQL` считается
+основным хранилищем текстовых данных для `train/retrain`.
+Локальный `data/processed/mixed_toxic_comments.sqlite3` остаётся legacy-источником для совместимости,
+первичного импорта и fallback-сценария, а не единственным рабочим хранилищем.
 
 Этот датасет объединяет несколько источников:
 
@@ -71,14 +74,46 @@ Jupyter Notebook используется как лаборатория: для 
 - по всему смешанному датасету;
 - отдельно по каждому источнику.
 
+### PostgreSQL training store
+
+По умолчанию используется отдельная схема `toxic_analyzer_model`.
+SQL/schema файлы лежат в `sql/postgres/`:
+
+- `001_create_training_store.sql`
+- `002_create_training_dataset_view.sql`
+
+Внутри схемы намеренно разделены разные типы данных:
+
+- `canonical_training_texts` — canonical labeled texts для baseline training;
+- `feedback_events` — пользовательские feedback-события, которые не идут в обучение напрямую;
+- `training_candidates` — промежуточный curated layer между feedback и canonical set;
+- `model_registry` — метаданные обученных моделей и путь к локальному артефакту;
+- `retrain_jobs` — состояние будущих `train/retrain` запусков.
+
+В обучение из PostgreSQL идут только:
+
+- записи из `canonical_training_texts` со статусом `labeled`;
+- записи из `training_candidates` со статусом `approved`.
+
+`feedback_events` не смешиваются с canonical training set напрямую.
+Веса модели не сохраняются в PostgreSQL: `model_registry.artifact_path` указывает на локальный файл в
+`model/artifacts/`, а само обучение и retrain по-прежнему живут в Python-коде внутри `model/`.
+
 ## Baseline pipeline
 
-Текущий baseline строится на смешанном датасете со следующими правилами:
+Текущий baseline строится на обучающей выборке, которую `train-baseline` получает через repository/data-source layer.
+По умолчанию CLI работает в режиме `--data-source auto`:
 
-- используются только строки с `label_status = labeled`;
+- если настроен PostgreSQL DSN или env-конфигурация, основной источник — view `training_examples_for_training`;
+- если PostgreSQL не настроен, используется локальный `data/processed/mixed_toxic_comments.sqlite3`.
+
+После загрузки данных применяются следующие правила:
+
+- используются только строки с бинарной меткой;
 - строки с одинаковым нормализованным текстом и противоречащими метками исключаются из обучения;
 - точные дубликаты текста с одинаковой меткой схлопываются до одной записи;
-- split строится как `70/15/15` со стратификацией по комбинации `source + label`.
+- split строится как `70/15/15` со стратификацией по комбинации `source + label`;
+- если в PostgreSQL появляются редкие curated source strata, sparse rows распределяются отдельно, не ломая основной stratified split для крупных источников.
 
 Для первого baseline в кодовой базе используется линейная модель на `TF-IDF` признаках:
 
@@ -101,10 +136,126 @@ train-baseline
 
 По умолчанию команда:
 
-- читает `data/processed/mixed_toxic_comments.sqlite3`;
+- работает в режиме `--data-source auto`;
+- сначала пытается читать данные из PostgreSQL, если настроены `TOXIC_ANALYZER_POSTGRES_DSN` или совместимый набор env vars;
+- при отсутствии PostgreSQL-конфигурации читает `data/processed/mixed_toxic_comments.sqlite3`;
 - сохраняет модель в `artifacts/baseline_model_v3_3.pkl`;
 - сохраняет отчёт с метриками в `artifacts/baseline_training_report_v3_3.json`;
 - использует `configs/baseline_seed_examples_v3.jsonl` и `configs/baseline_hard_cases_v3.jsonl`.
+
+Полезные режимы запуска:
+
+```bash
+train-baseline --data-source sqlite --dataset-db data/processed/mixed_toxic_comments.sqlite3
+train-baseline --data-source postgres --postgres-dsn "postgresql://user:pass@db.example.com:5432/toxic_analyzer"
+```
+
+Поддерживаются два способа настройки PostgreSQL:
+
+- единый DSN через `TOXIC_ANALYZER_POSTGRES_DSN` или `--postgres-dsn`;
+- набор env vars: `TOXIC_ANALYZER_POSTGRES_HOST`, `TOXIC_ANALYZER_POSTGRES_PORT`,
+  `TOXIC_ANALYZER_POSTGRES_DB`, `TOXIC_ANALYZER_POSTGRES_USER`,
+  `TOXIC_ANALYZER_POSTGRES_PASSWORD`, `TOXIC_ANALYZER_POSTGRES_SSLMODE`,
+  `TOXIC_ANALYZER_POSTGRES_SCHEMA`.
+
+`localhost` не захардкожен: можно указывать адрес отдельной машины, Docker hostname, WSL-host или любой другой
+доступный PostgreSQL endpoint.
+
+### Подготовка PostgreSQL schema и импорт legacy SQLite
+
+Рекомендуемый путь миграции:
+
+```bash
+python -m pip install -e .[dev]
+apply-training-store-schema --postgres-dsn "postgresql://user:pass@db.example.com:5432/toxic_analyzer"
+import-mixed-dataset-to-postgres --postgres-dsn "postgresql://user:pass@db.example.com:5432/toxic_analyzer" --apply-schema
+```
+
+`import-mixed-dataset-to-postgres`:
+
+- читает legacy `mixed_toxic_comments.sqlite3`, включая старую сокращённую SQLite-схему;
+- делает batched upsert в `canonical_training_texts`;
+- валидирует итоговые количества строк и breakdown по `source` / `label_status`;
+- безопасно перезапускается повторно за счёт upsert по `(origin_system, source, source_record_id)`.
+
+Если в окружении уже есть PostgreSQL deployment, используйте отдельную БД или отдельную schema.
+Эти команды не удаляют существующие инстансы, не требуют destructive Docker-операций и не переносят веса модели в БД.
+
+### Локальный PostgreSQL через Docker
+
+Для локальной разработки безопаснее поднимать отдельный контейнер с уникальным именем, отдельным volume и отдельным host port,
+а не переиспользовать уже существующие PostgreSQL-инстансы.
+
+Проверенный локальный профиль:
+
+- container name: `toxic-analyzer-postgres-e2e`
+- image: `postgres:17`
+- host port: `127.0.0.1:55432`
+- db: `toxic_analyzer_e2e`
+- user: `toxic_model`
+- schema: `toxic_analyzer_model`
+
+Пример запуска:
+
+```bash
+docker volume create toxic-analyzer-postgres-e2e-data
+docker run -d \
+  --name toxic-analyzer-postgres-e2e \
+  -e POSTGRES_DB=toxic_analyzer_e2e \
+  -e POSTGRES_USER=toxic_model \
+  -e POSTGRES_PASSWORD=toxic_model_pw \
+  -p 127.0.0.1:55432:5432 \
+  --health-cmd "pg_isready -U toxic_model -d toxic_analyzer_e2e" \
+  --health-interval 5s \
+  --health-timeout 3s \
+  --health-retries 20 \
+  -v toxic-analyzer-postgres-e2e-data:/var/lib/postgresql/data \
+  postgres:17
+```
+
+После этого можно применить schema и импортировать legacy dataset:
+
+```bash
+apply-training-store-schema --postgres-dsn "postgresql://toxic_model:toxic_model_pw@127.0.0.1:55432/toxic_analyzer_e2e"
+import-mixed-dataset-to-postgres --postgres-dsn "postgresql://toxic_model:toxic_model_pw@127.0.0.1:55432/toxic_analyzer_e2e"
+```
+
+Остановить и удалить именно этот контейнер:
+
+```bash
+docker stop toxic-analyzer-postgres-e2e
+docker rm -f toxic-analyzer-postgres-e2e
+docker volume rm toxic-analyzer-postgres-e2e-data
+```
+
+Важно:
+
+- системный PostgreSQL на `5432` можно оставить нетронутым;
+- отдельный Docker PostgreSQL должен жить на своём порту, например `55432`;
+- не использовать destructive Docker-команды против чужих контейнеров и volume.
+
+### Проверенный e2e сценарий
+
+На текущем этапе уже был реально прогнан локальный e2e сценарий на Docker PostgreSQL:
+
+1. поднят отдельный контейнер `postgres:17` на `127.0.0.1:55432`;
+2. применена schema `toxic_analyzer_model`;
+3. импортирован `data/processed/mixed_toxic_comments.sqlite3`;
+4. проверено, что в `canonical_training_texts` и `training_examples_for_training` доступно `164770` строк;
+5. выполнен `train-baseline --data-source postgres`;
+6. выполнены `predict-baseline` и `ask-baseline` от нового локального `.pkl` артефакта.
+
+Пример обучающего запуска:
+
+```bash
+train-baseline \
+  --data-source postgres \
+  --postgres-dsn "postgresql://toxic_model:toxic_model_pw@127.0.0.1:55432/toxic_analyzer_e2e" \
+  --model-output artifacts/baseline_model_postgres_docker_e2e.pkl \
+  --report-output artifacts/baseline_training_report_postgres_docker_e2e.json
+```
+
+В этом сценарии training report фиксировал `dataset_source.kind = "postgres"`, а inference оставался независимым от БД и работал только через локальный артефакт модели.
 
 ### Запуск инференса baseline
 
@@ -114,6 +265,18 @@ predict-baseline --text "ты ведёшь себя как идиот"
 
 Команда печатает JSON с `label`, `score` и `toxic_probability`.
 По умолчанию используется `artifacts/baseline_model_v3_3.pkl`.
+Для inference PostgreSQL не нужен: команда читает только локальный артефакт модели.
+
+### Программный слой инференса
+
+Для интеграции модели во внешний сервисный слой не нужно вызывать CLI-команды из Python-кода.
+Внутри пакета есть отдельный service-layer:
+
+- `toxic_analyzer.model_runtime` — разрешение пути к артефакту модели и её загрузка;
+- `toxic_analyzer.inference_service.ToxicityInferenceService` — программный интерфейс для single и batch inference.
+
+Это подготовительный слой для будущего лёгкого FastAPI внутри `model/`: CLI-инструменты используют тот же
+service-layer, что и будущие HTTP-ручки. PostgreSQL нужен для train/retrain и data management, а не для загрузки весов.
 
 ### Отдельный пользовательский скрипт
 

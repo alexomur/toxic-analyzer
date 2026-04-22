@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import sqlite3
+import math
+import random
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,14 +11,18 @@ from typing import Any, Iterable, Sequence
 
 from sklearn.model_selection import train_test_split
 
+from toxic_analyzer.training_data import (
+    SQLiteTrainingDataRepository,
+    TrainingDataRepository,
+)
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_MIXED_DATASET_PATH = ROOT_DIR / "data" / "processed" / "mixed_toxic_comments.sqlite3"
-ALLOWED_SOURCES = {"dvach", "ok", "habr"}
 
 
 @dataclass(slots=True)
 class CommentRecord:
-    row_id: int
+    row_id: str
     source: str
     text: str
     label: int
@@ -26,7 +31,7 @@ class CommentRecord:
 @dataclass(slots=True)
 class DatasetSplit:
     name: str
-    row_ids: list[int]
+    row_ids: list[str]
     texts: list[str]
     labels: list[int]
     sources: list[str]
@@ -81,35 +86,39 @@ def load_labeled_comments(
     drop_conflicting_texts: bool = True,
     deduplicate: bool = True,
 ) -> tuple[list[CommentRecord], dict[str, Any]]:
-    if not dataset_path.exists():
-        raise FileNotFoundError(dataset_path)
+    repository = SQLiteTrainingDataRepository(dataset_path=dataset_path)
+    return load_labeled_comments_from_repository(
+        repository,
+        drop_conflicting_texts=drop_conflicting_texts,
+        deduplicate=deduplicate,
+    )
 
-    connection = sqlite3.connect(dataset_path)
-    try:
-        rows = connection.execute(
-            """
-            SELECT id, source, raw_text, is_toxic
-            FROM comments
-            WHERE label_status = 'labeled'
-              AND is_toxic IS NOT NULL
-            ORDER BY id
-            """
-        ).fetchall()
-    finally:
-        connection.close()
+
+def load_labeled_comments_from_repository(
+    repository: TrainingDataRepository,
+    *,
+    drop_conflicting_texts: bool = True,
+    deduplicate: bool = True,
+) -> tuple[list[CommentRecord], dict[str, Any]]:
+    rows = repository.fetch_labeled_rows()
+    dataset_stats = repository.describe_source()
 
     raw_records: list[CommentRecord] = []
     text_labels: dict[str, set[int]] = defaultdict(set)
-    for row_id, source, text, label in rows:
-        if source not in ALLOWED_SOURCES:
-            raise ValueError(f"Unsupported source={source!r} in dataset.")
-        normalized_text = normalize_text_key(str(text))
-        label_int = int(label)
+    for row in rows:
+        source = str(row.source).strip()
+        if not source:
+            raise ValueError("Training data source names must be non-empty strings.")
+        text = str(row.text)
+        normalized_text = normalize_text_key(text)
+        label_int = int(row.label)
+        if label_int not in {0, 1}:
+            raise ValueError(f"Expected binary labels 0/1, got {row.label!r}.")
         raw_records.append(
             CommentRecord(
-                row_id=int(row_id),
-                source=str(source),
-                text=str(text),
+                row_id=str(row.row_id),
+                source=source,
+                text=text,
                 label=label_int,
             )
         )
@@ -143,7 +152,7 @@ def load_labeled_comments(
         f"{record.source}:{record.label}" for record in cleaned_records
     )
     dataset_stats = {
-        "dataset_path": str(dataset_path),
+        **dataset_stats,
         "loaded_rows": len(raw_records),
         "kept_rows": len(cleaned_records),
         "dropped_conflicting_rows": dropped_conflicting_rows,
@@ -154,6 +163,133 @@ def load_labeled_comments(
         "stratum_counts": dict(sorted(stratum_counts.items())),
     }
     return cleaned_records, dataset_stats
+
+
+def _split_indices_two_stage(
+    indices: Sequence[int],
+    strata: Sequence[str],
+    *,
+    train_size: float,
+    validation_size: float,
+    test_size: float,
+    random_seed: int,
+) -> tuple[list[int], list[int], list[int]]:
+    index_to_stratum = {index: stratum for index, stratum in zip(indices, strata, strict=True)}
+    train_indices, temp_indices = train_test_split(
+        list(indices),
+        train_size=train_size,
+        random_state=random_seed,
+        stratify=list(strata),
+    )
+    temp_strata = [index_to_stratum[index] for index in temp_indices]
+    validation_fraction = validation_size / (validation_size + test_size)
+    validation_indices, test_indices = train_test_split(
+        temp_indices,
+        train_size=validation_fraction,
+        random_state=random_seed,
+        stratify=temp_strata,
+    )
+    return train_indices, validation_indices, test_indices
+
+
+def _split_indices_without_stratification(
+    indices: Sequence[int],
+    *,
+    train_size: float,
+    validation_size: float,
+    test_size: float,
+    random_seed: int,
+) -> tuple[list[int], list[int], list[int]]:
+    shuffled = list(indices)
+    random.Random(random_seed).shuffle(shuffled)
+    train_end = int(round(len(shuffled) * train_size))
+    validation_end = train_end + int(round(len(shuffled) * validation_size))
+    train_indices = shuffled[:train_end]
+    validation_indices = shuffled[train_end:validation_end]
+    test_indices = shuffled[validation_end:]
+    return train_indices, validation_indices, test_indices
+
+
+def _split_indices_with_sparse_strata(
+    records: Sequence[CommentRecord],
+    *,
+    train_size: float,
+    validation_size: float,
+    test_size: float,
+    random_seed: int,
+) -> tuple[list[int], list[int], list[int], dict[str, Any]]:
+    primary_strata = [f"{record.source}:{record.label}" for record in records]
+    primary_counts = Counter(primary_strata)
+    held_out_fraction = validation_size + test_size
+    min_rows_per_primary_stratum = max(2, math.ceil(2.0 / held_out_fraction))
+    sparse_primary_strata = {
+        stratum: count
+        for stratum, count in primary_counts.items()
+        if count < min_rows_per_primary_stratum
+    }
+
+    if not sparse_primary_strata:
+        train_indices, validation_indices, test_indices = _split_indices_two_stage(
+            list(range(len(records))),
+            primary_strata,
+            train_size=train_size,
+            validation_size=validation_size,
+            test_size=test_size,
+            random_seed=random_seed,
+        )
+        return train_indices, validation_indices, test_indices, {
+            "min_rows_per_primary_stratum": min_rows_per_primary_stratum,
+            "sparse_primary_strata": {},
+            "rows_reassigned_to_label_only_strata": 0,
+            "sparse_rows_assigned_without_source_stratification": 0,
+        }
+
+    dense_indices = [
+        index
+        for index, primary_stratum in enumerate(primary_strata)
+        if primary_stratum not in sparse_primary_strata
+    ]
+    dense_strata = [primary_strata[index] for index in dense_indices]
+    sparse_indices_by_label: dict[int, list[int]] = defaultdict(list)
+    for index, primary_stratum in enumerate(primary_strata):
+        if primary_stratum in sparse_primary_strata:
+            sparse_indices_by_label[records[index].label].append(index)
+
+    train_indices: list[int]
+    validation_indices: list[int]
+    test_indices: list[int]
+    if dense_indices:
+        train_indices, validation_indices, test_indices = _split_indices_two_stage(
+            dense_indices,
+            dense_strata,
+            train_size=train_size,
+            validation_size=validation_size,
+            test_size=test_size,
+            random_seed=random_seed,
+        )
+    else:
+        train_indices, validation_indices, test_indices = [], [], []
+
+    sparse_rows = 0
+    for label, sparse_indices in sorted(sparse_indices_by_label.items()):
+        sparse_rows += len(sparse_indices)
+        sparse_train, sparse_validation, sparse_test = _split_indices_without_stratification(
+            sparse_indices,
+            train_size=train_size,
+            validation_size=validation_size,
+            test_size=test_size,
+            random_seed=random_seed + 1000 + label,
+        )
+        train_indices.extend(sparse_train)
+        validation_indices.extend(sparse_validation)
+        test_indices.extend(sparse_test)
+
+    return sorted(train_indices), sorted(validation_indices), sorted(test_indices), {
+        "min_rows_per_primary_stratum": min_rows_per_primary_stratum,
+        "sparse_primary_strata": dict(sorted(sparse_primary_strata.items())),
+        "rows_reassigned_to_label_only_strata": sparse_rows,
+        "sparse_rows_assigned_without_source_stratification": sparse_rows,
+    }
 
 
 def _build_split(
@@ -181,31 +317,45 @@ def create_dataset_bundle(
     drop_conflicting_texts: bool = True,
     deduplicate: bool = True,
 ) -> DatasetBundle:
+    repository = SQLiteTrainingDataRepository(dataset_path=dataset_path)
+    return create_dataset_bundle_from_repository(
+        repository,
+        train_size=train_size,
+        validation_size=validation_size,
+        test_size=test_size,
+        random_seed=random_seed,
+        drop_conflicting_texts=drop_conflicting_texts,
+        deduplicate=deduplicate,
+    )
+
+
+def create_dataset_bundle_from_repository(
+    repository: TrainingDataRepository,
+    *,
+    train_size: float = 0.7,
+    validation_size: float = 0.15,
+    test_size: float = 0.15,
+    random_seed: int = 42,
+    drop_conflicting_texts: bool = True,
+    deduplicate: bool = True,
+) -> DatasetBundle:
     _validate_split_sizes(train_size, validation_size, test_size)
-    records, dataset_stats = load_labeled_comments(
-        dataset_path=dataset_path,
+    records, dataset_stats = load_labeled_comments_from_repository(
+        repository=repository,
         drop_conflicting_texts=drop_conflicting_texts,
         deduplicate=deduplicate,
     )
     if len(records) < 3:
         raise ValueError("Need at least three labeled rows to create train/validation/test splits.")
 
-    indices = list(range(len(records)))
-    strata = [f"{record.source}:{record.label}" for record in records]
-
-    train_indices, temp_indices = train_test_split(
-        indices,
+    train_indices, validation_indices, test_indices, stratification_stats = (
+        _split_indices_with_sparse_strata(
+        records,
         train_size=train_size,
-        random_state=random_seed,
-        stratify=strata,
-    )
-    temp_strata = [strata[index] for index in temp_indices]
-    validation_fraction = validation_size / (validation_size + test_size)
-    validation_indices, test_indices = train_test_split(
-        temp_indices,
-        train_size=validation_fraction,
-        random_state=random_seed,
-        stratify=temp_strata,
+        validation_size=validation_size,
+        test_size=test_size,
+        random_seed=random_seed,
+        )
     )
 
     bundle = DatasetBundle(
@@ -214,6 +364,7 @@ def create_dataset_bundle(
         test=_build_split("test", records, test_indices),
         dataset_stats=dataset_stats,
     )
+    bundle.dataset_stats["stratification"] = stratification_stats
     bundle.dataset_stats["splits"] = {
         "train": bundle.train.to_summary(),
         "validation": bundle.validation.to_summary(),

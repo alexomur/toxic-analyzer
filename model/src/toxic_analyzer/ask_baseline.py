@@ -5,19 +5,21 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Callable, Protocol, Sequence
 
-from toxic_analyzer.baseline_model import ToxicityBaselineModel, ToxicityPrediction
+from toxic_analyzer.baseline_model import ToxicityPrediction
+from toxic_analyzer.inference_service import ToxicityInferenceService
+from toxic_analyzer.model_runtime import (
+    DEFAULT_MODEL_PATH,
+    build_missing_model_message,
+)
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model_v3_3.pkl"
-FALLBACK_MODEL_PATHS = [
-    ROOT_DIR / "artifacts" / "baseline_model_v3_2.pkl",
-    ROOT_DIR / "artifacts" / "baseline_model_v3_1.pkl",
-    ROOT_DIR / "artifacts" / "baseline_model_v3.pkl",
-    ROOT_DIR / "artifacts" / "baseline_model_v2.pkl",
-    ROOT_DIR / "artifacts" / "baseline_model.pkl",
-]
+
+class SupportsSinglePrediction(Protocol):
+    def predict_one(self, text: str) -> ToxicityPrediction:
+        ...
+
+
 EXIT_COMMANDS = {"exit", "quit", "q", "выход"}
 
 
@@ -46,32 +48,25 @@ def sanitize_text(text: str) -> str:
     return sanitized.strip()
 
 
-def load_model(model_path: Path) -> ToxicityBaselineModel:
-    resolved_path = model_path.resolve()
-    if not resolved_path.exists() and resolved_path == DEFAULT_MODEL_PATH.resolve():
-        for fallback_path in FALLBACK_MODEL_PATHS:
-            if fallback_path.resolve().exists():
-                resolved_path = fallback_path.resolve()
-                break
-    if not resolved_path.exists():
-        raise SystemExit(
-            "Файл модели не найден. Сначала обучите baseline командой `train-baseline` "
-            f"или укажите путь через --model-path: {resolved_path}"
-        )
-    return ToxicityBaselineModel.load(resolved_path)
+def load_service(model_path: Path) -> ToxicityInferenceService:
+    try:
+        return ToxicityInferenceService.from_path(model_path)
+    except FileNotFoundError as exc:
+        missing_path = Path(str(exc.args[0]))
+        raise SystemExit(build_missing_model_message(missing_path)) from exc
 
 
 def run_single_prediction(
-    model: ToxicityBaselineModel,
+    service: SupportsSinglePrediction,
     text: str,
     *,
     output_fn: Callable[[str], None],
 ) -> None:
-    output_fn(format_prediction(text, model.predict_one(text)))
+    output_fn(format_prediction(text, service.predict_one(text)))
 
 
 def interactive_loop(
-    model: ToxicityBaselineModel,
+    service: SupportsSinglePrediction,
     *,
     input_fn: Callable[[str], str] = input,
     output_fn: Callable[[str], None] = print,
@@ -87,18 +82,18 @@ def interactive_loop(
         if not text or text.lower() in EXIT_COMMANDS:
             output_fn("Завершение.")
             return
-        run_single_prediction(model, text, output_fn=output_fn)
+        run_single_prediction(service, text, output_fn=output_fn)
         output_fn("")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    model = load_model(args.model_path)
+    service = load_service(args.model_path)
     if args.text:
-        run_single_prediction(model, sanitize_text(" ".join(args.text)), output_fn=print)
+        run_single_prediction(service, sanitize_text(" ".join(args.text)), output_fn=print)
         return 0
 
-    interactive_loop(model)
+    interactive_loop(service)
     return 0
 
 

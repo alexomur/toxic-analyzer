@@ -12,6 +12,7 @@ dependencies = [
     "datasets>=4.1,<5.0",
     "huggingface-hub>=0.24,<2.0",
     "numpy>=1.26,<3.0",
+    "psycopg[binary]>=3.2,<4.0",
     "pyarrow>=21.0,<24.0",
     "scikit-learn>=1.5,<2.0",
 ]
@@ -23,6 +24,8 @@ build-mixed-toxic-dataset = "toxic_analyzer.build_mixed_toxic_dataset:main"
 train-baseline = "toxic_analyzer.train_baseline:main"
 predict-baseline = "toxic_analyzer.predict_baseline:main"
 ask-baseline = "toxic_analyzer.ask_baseline:main"
+apply-training-store-schema = "toxic_analyzer.apply_training_store_schema:main"
+import-mixed-dataset-to-postgres = "toxic_analyzer.import_mixed_dataset_to_postgres:main"
 
 [project.optional-dependencies]
 dev = [

@@ -8,9 +8,16 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-from toxic_analyzer.baseline_data import DEFAULT_MIXED_DATASET_PATH, create_dataset_bundle
+from toxic_analyzer.baseline_data import (
+    DEFAULT_MIXED_DATASET_PATH,
+    create_dataset_bundle_from_repository,
+)
 from toxic_analyzer.baseline_model import BaselineTrainingConfig, train_baseline_model
 from toxic_analyzer.hard_case_dataset import load_hard_case_dataset
+from toxic_analyzer.training_data import (
+    DEFAULT_TRAINING_DATA_CACHE_PATH,
+    resolve_training_data_repository,
+)
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_MODEL_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_model_v3_3.pkl"
@@ -22,6 +29,15 @@ DEFAULT_SEED_DATASET_PATH = ROOT_DIR / "configs" / "baseline_seed_examples_v3.js
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-db", type=Path, default=DEFAULT_MIXED_DATASET_PATH)
+    parser.add_argument(
+        "--data-source",
+        choices=["auto", "sqlite", "postgres", "cache"],
+        default="auto",
+    )
+    parser.add_argument("--postgres-dsn")
+    parser.add_argument("--postgres-schema")
+    parser.add_argument("--dataset-cache", type=Path, default=DEFAULT_TRAINING_DATA_CACHE_PATH)
+    parser.add_argument("--refresh-dataset-cache", action="store_true")
     parser.add_argument("--model-output", type=Path, default=DEFAULT_MODEL_OUTPUT_PATH)
     parser.add_argument("--report-output", type=Path, default=DEFAULT_REPORT_OUTPUT_PATH)
     parser.add_argument("--random-seed", type=int, default=42)
@@ -44,8 +60,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    dataset_bundle = create_dataset_bundle(
+    repository = resolve_training_data_repository(
+        data_source=str(args.data_source),
         dataset_path=args.dataset_db.resolve(),
+        postgres_dsn=args.postgres_dsn,
+        postgres_schema=args.postgres_schema,
+        dataset_cache_path=args.dataset_cache.resolve(),
+        refresh_dataset_cache=bool(args.refresh_dataset_cache),
+    )
+    dataset_bundle = create_dataset_bundle_from_repository(
+        repository,
         train_size=float(args.train_size),
         validation_size=float(args.validation_size),
         test_size=float(args.test_size),

@@ -8,7 +8,7 @@ import sqlite3
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Iterator, Sequence
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_INPUT_JSONL_PATH = (
@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS comments (
 
 CREATE INDEX IF NOT EXISTS idx_comments_label_status
     ON comments(label_status);
+"""
+
+INSERT_SQL = """
+INSERT INTO comments (
+    id, comment_id, habr_score, raw_text, toxic_label, label_status
+)
+VALUES (:id, :comment_id, :habr_score, :raw_text, :toxic_label, :label_status)
 """
 
 
@@ -94,7 +101,7 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
     connection.commit()
 
 
-def iter_jsonl_rows(input_jsonl: Path) -> Sequence[dict[str, Any]]:
+def iter_jsonl_rows(input_jsonl: Path) -> Iterator[dict[str, Any]]:
     with input_jsonl.open("r", encoding="utf-8") as handle:
         for index, line in enumerate(handle, start=1):
             payload = line.strip()
@@ -120,29 +127,13 @@ def insert_compact_rows_from_jsonl(connection: sqlite3.Connection, input_jsonl: 
     for row in iter_jsonl_rows(input_jsonl):
         batch.append(row)
         if len(batch) >= BATCH_SIZE:
-            connection.executemany(
-                """
-                INSERT INTO comments (
-                    id, comment_id, habr_score, raw_text, toxic_label, label_status
-                )
-                VALUES (:id, :comment_id, :habr_score, :raw_text, :toxic_label, :label_status)
-                """,
-                batch,
-            )
+            connection.executemany(INSERT_SQL, batch)
             connection.commit()
             inserted += len(batch)
             batch.clear()
 
     if batch:
-        connection.executemany(
-            """
-            INSERT INTO comments (
-                id, comment_id, habr_score, raw_text, toxic_label, label_status
-            )
-            VALUES (:id, :comment_id, :habr_score, :raw_text, :toxic_label, :label_status)
-            """,
-            batch,
-        )
+        connection.executemany(INSERT_SQL, batch)
         connection.commit()
         inserted += len(batch)
 

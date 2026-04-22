@@ -291,12 +291,6 @@ def list_remote_parquet_files(config: SourceConfig) -> list[str]:
     return files
 
 
-def download_parquet_files(config: SourceConfig) -> Iterator[Path]:
-    for remote_path in list_remote_parquet_files(config):
-        local_path = hf_hub_download(config.repo_id, remote_path, repo_type=config.repo_type)
-        yield Path(local_path)
-
-
 def iter_article_rows(parquet_paths: Iterable[Path], batch_size: int) -> Iterator[dict[str, Any]]:
     for parquet_path in parquet_paths:
         parquet_file = pq.ParquetFile(parquet_path)
