@@ -21,7 +21,9 @@ from toxic_analyzer.postgres_store import (
 )
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_TRAINING_DATA_CACHE_PATH = ROOT_DIR / "data" / "cache" / "baseline_training_dataset.jsonl.gz"
+DEFAULT_TRAINING_DATA_CACHE_PATH = (
+    ROOT_DIR / "data" / "cache" / "baseline_training_dataset.jsonl.gz"
+)
 
 
 @dataclass(slots=True)
@@ -339,7 +341,11 @@ def resolve_training_data_repository(
             return materialize_training_data_cache(repository, cache_path=resolved_cache_path)
         return repository
 
-    if resolved_cache_path is not None and resolved_cache_path.exists() and not dataset_path.exists():
+    if (
+        resolved_cache_path is not None
+        and resolved_cache_path.exists()
+        and not dataset_path.exists()
+    ):
         return CachedTrainingDataRepository(cache_path=resolved_cache_path)
 
     return SQLiteTrainingDataRepository(dataset_path=dataset_path)

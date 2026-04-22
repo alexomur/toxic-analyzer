@@ -46,6 +46,18 @@ class ModelInfo:
 
 
 @dataclass(slots=True)
+class ModelIdentity:
+    model_key: str
+    model_version: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "model_key": self.model_key,
+            "model_version": self.model_version,
+        }
+
+
+@dataclass(slots=True)
 class ToxicityInferenceService:
     model: ToxicityBaselineModel
     model_path: Path | None = None
@@ -83,6 +95,21 @@ class ToxicityInferenceService:
         return {
             "items": [item.to_dict() for item in self.predict_batch(texts)],
         }
+
+    def get_model_identity(self) -> ModelIdentity:
+        metadata = self.model.metadata
+        model_version = str(metadata.get("model_version") or "unknown")
+        raw_model_key = metadata.get("model_key")
+        if raw_model_key:
+            model_key = str(raw_model_key)
+        elif self.model_path is not None:
+            model_key = self.model_path.stem
+        else:
+            model_key = f"baseline-{model_version}"
+        return ModelIdentity(
+            model_key=model_key,
+            model_version=model_version,
+        )
 
     def get_model_info(self) -> ModelInfo:
         metadata = self.model.metadata

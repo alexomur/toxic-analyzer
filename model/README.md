@@ -275,8 +275,9 @@ predict-baseline --text "ты ведёшь себя как идиот"
 - `toxic_analyzer.model_runtime` — разрешение пути к артефакту модели и её загрузка;
 - `toxic_analyzer.inference_service.ToxicityInferenceService` — программный интерфейс для single и batch inference.
 
-Это подготовительный слой для будущего лёгкого FastAPI внутри `model/`: CLI-инструменты используют тот же
-service-layer, что и будущие HTTP-ручки. PostgreSQL нужен для train/retrain и data management, а не для загрузки весов.
+CLI-инструменты и внутренний FastAPI используют тот же service-layer. PostgreSQL нужен для
+train/retrain и data management, а не для загрузки весов. Отдельный runtime/admin контракт
+описан в [FASTAPI.md](C:/Users/Alexomur/Desktop/projects/toxic-analyzer/model/FASTAPI.md).
 
 ### Отдельный пользовательский скрипт
 
@@ -443,6 +444,31 @@ run_prepare_habr_comments.bat --resume --start-shard 8
 
 Если текст пограничный, приоритет у более консервативной разметки: без явной направленной агрессии ставится `Нет`.
 В таких случаях `score` может быть ниже из-за неопределённости.
+
+## FastAPI runtime
+
+Внутренний FastAPI слой можно поднять прямо из `model/`:
+
+```bash
+python -m pip install -e .[dev]
+serve-model-api --host 127.0.0.1 --port 8000
+```
+
+По умолчанию runtime загружает `artifacts/baseline_model_v3_3.pkl`. Если локальный артефакт отсутствует, `GET /health/live` отвечает успешно, а `GET /health/ready` возвращает `503`.
+
+Доступные ручки:
+
+- `GET /health/live`
+- `GET /health/ready`
+- `GET /v1/model/info`
+- `POST /v1/predict`
+- `POST /v1/predict/batch`
+- `POST /v1/admin/reload`
+- `POST /v1/admin/retrain`
+- `GET /v1/admin/jobs/{job_key}`
+- `GET /v1/admin/jobs`
+
+Для `retrain` и job-status должен быть настроен PostgreSQL training store через `TOXIC_ANALYZER_POSTGRES_DSN` или совместимый набор env vars. Runtime inference по-прежнему читает только локальный артефакт модели.
 
 ## Короткий guide для ручной разметки
 

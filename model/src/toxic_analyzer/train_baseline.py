@@ -3,27 +3,22 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Sequence
 
-from toxic_analyzer.baseline_data import (
-    DEFAULT_MIXED_DATASET_PATH,
-    create_dataset_bundle_from_repository,
-)
-from toxic_analyzer.baseline_model import BaselineTrainingConfig, train_baseline_model
-from toxic_analyzer.hard_case_dataset import load_hard_case_dataset
-from toxic_analyzer.training_data import (
+from toxic_analyzer.baseline_data import DEFAULT_MIXED_DATASET_PATH
+from toxic_analyzer.baseline_model import BaselineTrainingConfig
+from toxic_analyzer.training_service import (
+    DEFAULT_HARD_CASE_DATASET_PATH,
+    DEFAULT_MODEL_OUTPUT_PATH,
+    DEFAULT_REPORT_OUTPUT_PATH,
+    DEFAULT_SEED_DATASET_PATH,
     DEFAULT_TRAINING_DATA_CACHE_PATH,
-    resolve_training_data_repository,
+    BaselineTrainingRequest,
+    run_baseline_training,
+    save_training_artifacts,
 )
-
-ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_model_v3_3.pkl"
-DEFAULT_REPORT_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_training_report_v3_3.json"
-DEFAULT_HARD_CASE_DATASET_PATH = ROOT_DIR / "configs" / "baseline_hard_cases_v3.jsonl"
-DEFAULT_SEED_DATASET_PATH = ROOT_DIR / "configs" / "baseline_seed_examples_v3.jsonl"
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -60,53 +55,44 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    repository = resolve_training_data_repository(
+    training_request = BaselineTrainingRequest(
         data_source=str(args.data_source),
         dataset_path=args.dataset_db.resolve(),
         postgres_dsn=args.postgres_dsn,
         postgres_schema=args.postgres_schema,
         dataset_cache_path=args.dataset_cache.resolve(),
         refresh_dataset_cache=bool(args.refresh_dataset_cache),
-    )
-    dataset_bundle = create_dataset_bundle_from_repository(
-        repository,
+        random_seed=int(args.random_seed),
         train_size=float(args.train_size),
         validation_size=float(args.validation_size),
         test_size=float(args.test_size),
-        random_seed=int(args.random_seed),
+        config=BaselineTrainingConfig(
+            random_seed=int(args.random_seed),
+            logistic_c=float(args.logistic_c),
+            logistic_max_iter=int(args.logistic_max_iter),
+            min_df=int(args.min_df),
+            max_word_features=int(args.max_word_features) or None,
+            max_char_features=int(args.max_char_features) or None,
+            select_k_best=int(args.select_k_best),
+            threshold_grid_size=int(args.threshold_grid_size),
+            use_expert_features=not bool(args.no_expert_features),
+            calibration_method=str(args.calibration_method),
+        ),
+        hard_case_dataset_path=args.hard_case_dataset.resolve(),
+        seed_dataset_path=args.seed_dataset.resolve(),
     )
-    config = BaselineTrainingConfig(
-        random_seed=int(args.random_seed),
-        logistic_c=float(args.logistic_c),
-        logistic_max_iter=int(args.logistic_max_iter),
-        min_df=int(args.min_df),
-        max_word_features=int(args.max_word_features) or None,
-        max_char_features=int(args.max_char_features) or None,
-        select_k_best=int(args.select_k_best),
-        threshold_grid_size=int(args.threshold_grid_size),
-        use_expert_features=not bool(args.no_expert_features),
-        calibration_method=str(args.calibration_method),
-    )
-    hard_case_path = args.hard_case_dataset.resolve()
-    hard_case_dataset = load_hard_case_dataset(hard_case_path) if hard_case_path.exists() else None
-    seed_path = args.seed_dataset.resolve()
-    seed_dataset = load_hard_case_dataset(seed_path) if seed_path.exists() else None
-    model, report = train_baseline_model(
-        dataset_bundle,
-        config=config,
-        hard_case_dataset=hard_case_dataset,
-        seed_dataset=seed_dataset,
-    )
+    training_result = run_baseline_training(training_request)
 
     model_output = args.model_output.resolve()
     report_output = args.report_output.resolve()
-    model.save(model_output)
-    report_output.parent.mkdir(parents=True, exist_ok=True)
-    report_output.write_text(
-        json.dumps(report, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    save_training_artifacts(
+        training_result,
+        model_output_path=model_output,
+        report_output_path=report_output,
     )
 
+    report = training_result.report
+    model = training_result.model
     test_metrics = report["metrics"]["test"]["overall"]
     print(
         "[train-baseline] Done: "
