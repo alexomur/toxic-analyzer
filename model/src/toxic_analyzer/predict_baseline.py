@@ -11,8 +11,9 @@ from typing import Sequence
 from toxic_analyzer.baseline_model import ToxicityBaselineModel
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model_v3_2.pkl"
+DEFAULT_MODEL_PATH = ROOT_DIR / "artifacts" / "baseline_model_v3_3.pkl"
 FALLBACK_MODEL_PATHS = [
+    ROOT_DIR / "artifacts" / "baseline_model_v3_2.pkl",
     ROOT_DIR / "artifacts" / "baseline_model_v3_1.pkl",
     ROOT_DIR / "artifacts" / "baseline_model_v3.pkl",
     ROOT_DIR / "artifacts" / "baseline_model_v2.pkl",

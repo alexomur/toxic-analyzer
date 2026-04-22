@@ -864,3 +864,115 @@ precision на редком и более чистом домене.
 Именно такой цикл и был реализован для `V3.1 -> V3.2`.
 Он показал, что даже без смены модели можно существенно улучшить поведение baseline
 на редком домене, если работать не только с кодом, но и с качеством разметки.
+
+## V3.3: полный dvach mismatch-pass и переобучение
+
+После `V3.2` следующим шагом был уже не `habr`, а полный ручной разбор `dvach`-очереди
+из артефакта:
+
+- `artifacts/baseline_v3_2_mismatch_cases.jsonl`;
+- `artifacts/baseline_v3_2_mismatch_cases_summary.json`.
+
+На момент запуска этого прохода `dvach` давал `1112` mismatch'ей:
+
+- `51` false positive;
+- `1061` false negative.
+
+Практически весь хвост был просмотрен вручную по рабочему определению токсичности из `README.md`.
+Консервативное правило осталось тем же:
+
+- если ошибка базы очевидна, база исправляется;
+- если очевидно ошиблась модель, база не трогается;
+- пограничные случаи решаются в сторону более строгой интерпретации именно направленной словесной агрессии.
+
+### Что было сделано в данных
+
+Для `dvach` был выполнен полный review mismatch-очереди `V3.2` с сохранением промежуточных
+артефактов по диапазонам:
+
+- `artifacts/dvach_first_100_review_pass2.jsonl`;
+- `artifacts/dvach_first_100_db_updates_1_to_0.jsonl`;
+- `artifacts/dvach_next_300_review.jsonl`;
+- `artifacts/dvach_next_300_db_updates_1_to_0.jsonl`;
+- `artifacts/dvach_next_300_review_401_700.jsonl`;
+- `artifacts/dvach_next_300_db_updates_401_700_1_to_0.jsonl`;
+- `artifacts/dvach_remaining_review_701_1112.jsonl`;
+- `artifacts/dvach_remaining_db_updates_701_1112.jsonl`.
+
+Итог по правкам базы:
+
+- `677` исправлений `1 -> 0`;
+- `20` исправлений `0 -> 1`;
+- всего `697` ручных изменений по `dvach`.
+
+В сырой размеченной базе `dvach` после этого стал заметно менее перекошенным:
+
+- было: `2570` non-toxic / `4733` toxic;
+- стало: `3249` non-toxic / `4169` toxic.
+
+Для самого train/eval pipeline после deduplication и удаления конфликтующих дублей
+это превратилось в такой обучающий срез:
+
+- `dvach:0 = 3225`;
+- `dvach:1 = 4087`.
+
+### Что изменилось в коде и артефактах
+
+Для `V3.3` архитектура baseline не менялась: это всё тот же линейный `TF-IDF + LogisticRegression`
+пайплайн с уже существующими V3 post-hoc adjustments.
+
+Инженерные изменения были versioning-уровня:
+
+- default artifact paths переведены на `baseline_model_v3_3.pkl`
+  и `baseline_training_report_v3_3.json`;
+- `model_version` изменён на `v3.3`;
+- V3 probability adjustments теперь применяются и к `v3.3`;
+- CLI (`predict-baseline`, `ask-baseline`) по умолчанию смотрят на `v3.3`,
+  но сохраняют fallback на старые checkpoints;
+- versioning-тест обновлён под `v3.3`.
+
+Новые артефакты обучения:
+
+- `artifacts/baseline_model_v3_3.pkl`;
+- `artifacts/baseline_training_report_v3_3.json`.
+
+### Результаты V3.3
+
+По `test`-сплиту `V3.3` показала:
+
+- overall: `f1 = 0.9463`, `precision = 0.9458`, `recall = 0.9468`, `threshold = 0.39`;
+- `dvach` test: `f1 = 0.8702`, `precision = 0.9896`, `recall = 0.7765`;
+- `ok` test: `f1 = 0.9567`, `precision = 0.9499`, `recall = 0.9636`;
+- `habr` test: `f1 = 0.2824`, `precision = 0.1875`, `recall = 0.5714`;
+- hard cases: `f1 = 1.0000`, `precision = 1.0000`, `recall = 1.0000`.
+
+Сравнение с `V3.2`:
+
+- overall `f1`: `0.9403 -> 0.9463`;
+- overall `accuracy`: `0.9647 -> 0.9682`;
+- overall `precision`: `0.9559 -> 0.9458`;
+- overall `recall`: `0.9252 -> 0.9468`;
+- `dvach` test `f1`: `0.7903 -> 0.8702`;
+- `dvach` test `recall`: `0.6662 -> 0.7765`;
+- `dvach` test `roc_auc`: `0.9516 -> 0.9764`;
+- `habr` test просел по `f1`: `0.3158 -> 0.2824`.
+
+Ключевой эффект `V3.3` — резкий прирост качества именно на `dvach`,
+ради которого и был выполнен полный ручной mismatch-pass. Модель стала менее
+консервативной (`threshold 0.505 -> 0.39`) и начала заметно лучше поднимать
+токсичные `dvach`-кейсы без деградации overall-метрик.
+
+### Главный вывод после V3.3
+
+Полный ручной mismatch-pass по одному домену может дать больший practical uplift,
+чем очередная локальная настройка признаков или classifier hyperparameters.
+
+`V3.3` зафиксировала важную для проекта точку:
+
+1. baseline-архитектура сама по себе ещё не упёрлась в потолок;
+2. качество разметки на `dvach` было одним из главных bottleneck'ов;
+3. после чистки данных улучшение пришло не только в domain-specific метриках,
+   но и в overall test quality;
+4. следующим логичным шагом после `V3.3` уже становится не бесконечная ручная
+   правка старого mismatch-списка, а пересборка нового mismatch-pass поверх
+   `v3.3` и анализ того, какие ошибки теперь действительно принадлежат модели.

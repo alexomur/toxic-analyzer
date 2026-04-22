@@ -49,3 +49,5 @@ outputs/
 *.bin
 *.joblib
 *.pkl
+
+*.pdf
