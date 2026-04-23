@@ -1,6 +1,5 @@
 """Apply PostgreSQL schema files for the model training store."""
 
-from __future__ import annotations
 
 import argparse
 import sys

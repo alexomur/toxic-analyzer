@@ -52,13 +52,11 @@ class BaselineTrainingConfig:
 @dataclass(slots=True)
 class ToxicityPrediction:
     label: int
-    score: float
     toxic_probability: float
 
     def to_dict(self) -> dict[str, float | int]:
         return {
             "label": self.label,
-            "score": round(self.score, 6),
             "toxic_probability": round(self.toxic_probability, 6),
         }
 
@@ -121,11 +119,9 @@ class ToxicityBaselineModel:
         predictions: list[ToxicityPrediction] = []
         for probability in probabilities:
             label = int(probability >= self.threshold)
-            score = probability if label == 1 else 1.0 - probability
             predictions.append(
                 ToxicityPrediction(
                     label=label,
-                    score=float(score),
                     toxic_probability=float(probability),
                 )
             )

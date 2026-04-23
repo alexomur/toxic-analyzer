@@ -1,6 +1,5 @@
 """Admin FastAPI routes for model reload and retrain orchestration."""
 
-from __future__ import annotations
 
 from pathlib import Path
 

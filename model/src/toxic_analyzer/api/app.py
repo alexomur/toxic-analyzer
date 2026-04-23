@@ -1,6 +1,5 @@
 """FastAPI entrypoint for the internal model runtime service."""
 
-from __future__ import annotations
 
 import argparse
 from contextlib import asynccontextmanager

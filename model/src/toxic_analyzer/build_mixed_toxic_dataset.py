@@ -1,6 +1,5 @@
 """Build a mixed SQLite dataset from dvach, OK, and Habr sources."""
 
-from __future__ import annotations
 
 import argparse
 import csv
@@ -13,7 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
+from toxic_analyzer.paths import MODEL_ROOT
+
+ROOT_DIR = MODEL_ROOT
 DEFAULT_DVACH_CSV_PATH = ROOT_DIR / "data" / "processed" / "labeled.csv"
 DEFAULT_OK_DATASET_PATH = ROOT_DIR / "data" / "processed" / "dataset.txt"
 DEFAULT_HABR_DB_PATH = ROOT_DIR / "data" / "processed" / "habr_comments_annotation_compact.sqlite3"

@@ -1,6 +1,5 @@
 """Download, flatten and clean Habr comments for manual toxicity annotation."""
 
-from __future__ import annotations
 
 import argparse
 import fnmatch
@@ -20,7 +19,9 @@ from typing import Any, Iterable, Iterator, Sequence
 import pyarrow.parquet as pq
 from huggingface_hub import hf_hub_download, list_repo_files
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
+from toxic_analyzer.paths import MODEL_ROOT
+
+ROOT_DIR = MODEL_ROOT
 DEFAULT_CONFIG_PATH = ROOT_DIR / "configs" / "habr_comments.toml"
 
 ARTICLE_COLUMNS = [

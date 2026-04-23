@@ -21,6 +21,26 @@ serve-model-api --host 127.0.0.1 --port 8000
 
 By default the runtime loads `artifacts/baseline_model_v3_3.pkl`.
 
+## Docker runtime
+
+Build from the repository root:
+
+```bash
+docker build -t toxic-analyzer-model:local ./model
+```
+
+Run the container:
+
+```bash
+docker run --rm -p 8000:8000 --name toxic-analyzer-model toxic-analyzer-model:local
+```
+
+Notes:
+
+- The image expects a local model artifact under `model/artifacts/`, typically `baseline_model_v3_3.pkl`.
+- `GET /health/live` is suitable for process liveness, while `GET /health/ready` is used as the container healthcheck.
+- If retrain or job-status endpoints are needed, pass PostgreSQL settings with `-e TOXIC_ANALYZER_POSTGRES_DSN=...` or the compatible env var set.
+
 ## Runtime behavior
 
 ### Liveness and readiness
@@ -73,7 +93,6 @@ Response:
 {
   "id": "comment-1",
   "label": 1,
-  "score": 0.91,
   "toxic_probability": 0.91,
   "model_key": "baseline-a",
   "model_version": "v3.3"
@@ -103,13 +122,13 @@ Response:
   "model_key": "baseline-a",
   "model_version": "v3.3",
   "items": [
-    { "id": "a", "label": 0, "score": 0.86, "toxic_probability": 0.14 },
-    { "id": "b", "label": 1, "score": 0.91, "toxic_probability": 0.91 }
+    { "id": "a", "label": 0, "toxic_probability": 0.14 },
+    { "id": "b", "label": 1, "toxic_probability": 0.91 }
   ]
 }
 ```
 
-`score` remains the confidence in the selected class, not the degree of toxicity.
+Inference responses now expose only the binary `label` and `toxic_probability`, plus model metadata.
 
 ## Reload flow
 

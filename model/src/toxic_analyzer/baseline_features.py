@@ -1,6 +1,5 @@
 """Handcrafted sparse features for short and implicit toxic phrases."""
 
-from __future__ import annotations
 
 import re
 from collections.abc import Sequence

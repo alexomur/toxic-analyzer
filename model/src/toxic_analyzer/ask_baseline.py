@@ -1,6 +1,5 @@
 """User-friendly CLI for baseline toxicity predictions."""
 
-from __future__ import annotations
 
 import argparse
 import sys
@@ -36,7 +35,6 @@ def format_prediction(text: str, prediction: ToxicityPrediction) -> str:
         f"Текст: {text}\n"
         f"Вердикт модели: {verdict}\n"
         f"label: {prediction.label}\n"
-        f"score: {prediction.score:.6f}\n"
         f"p(toxic): {prediction.toxic_probability:.6f}"
     )
 

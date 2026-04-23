@@ -16,10 +16,8 @@ class StubModel:
     def predict_one(self, text: str) -> ToxicityPrediction:
         label = int("идиот" in text.lower())
         toxic_probability = 0.9 if label == 1 else 0.2
-        score = toxic_probability if label == 1 else 1.0 - toxic_probability
         return ToxicityPrediction(
             label=label,
-            score=score,
             toxic_probability=toxic_probability,
         )
 
@@ -36,7 +34,6 @@ def test_build_single_response_payload_uses_model_prediction() -> None:
         "text": "ты идиот",
         "prediction": {
             "label": 1,
-            "score": 0.9,
             "toxic_probability": 0.9,
         },
     }

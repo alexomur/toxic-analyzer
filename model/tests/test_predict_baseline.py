@@ -12,7 +12,6 @@ class StubService:
             "text": text,
             "prediction": {
                 "label": 1,
-                "score": 0.9,
                 "toxic_probability": 0.9,
             },
         }
@@ -24,7 +23,6 @@ class StubService:
                     "text": text,
                     "prediction": {
                         "label": int("идиот" in text.lower()),
-                        "score": 0.9 if "идиот" in text.lower() else 0.8,
                         "toxic_probability": 0.9 if "идиот" in text.lower() else 0.2,
                     },
                 }
@@ -63,7 +61,6 @@ def test_main_prints_single_prediction_payload(
         "text": "ты идиот",
         "prediction": {
             "label": 1,
-            "score": 0.9,
             "toxic_probability": 0.9,
         },
     }

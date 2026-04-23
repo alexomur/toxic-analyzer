@@ -1,6 +1,5 @@
 """Build a compact SQLite annotation database for Habr toxicity annotation."""
 
-from __future__ import annotations
 
 import argparse
 import json
@@ -10,7 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
+from toxic_analyzer.paths import MODEL_ROOT
+
+ROOT_DIR = MODEL_ROOT
 DEFAULT_INPUT_JSONL_PATH = (
     ROOT_DIR / "data" / "processed" / "habr_comments_russian_annotation_pool.jsonl"
 )

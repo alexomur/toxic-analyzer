@@ -1,6 +1,5 @@
 """HTTP schemas for the internal FastAPI model service."""
 
-from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
@@ -47,7 +46,6 @@ class PredictRequest(ApiSchema):
 class PredictionResponse(ApiSchema):
     id: str | int | None = None
     label: int
-    score: float
     toxic_probability: float
     model_key: str
     model_version: str
@@ -72,7 +70,6 @@ class BatchPredictionRequest(ApiSchema):
 class BatchPredictionItemResponse(ApiSchema):
     id: str | int | None = None
     label: int
-    score: float
     toxic_probability: float
 
 

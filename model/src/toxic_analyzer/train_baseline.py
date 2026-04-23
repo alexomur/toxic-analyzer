@@ -1,6 +1,5 @@
 """Train the baseline toxicity classifier on the mixed dataset."""
 
-from __future__ import annotations
 
 import argparse
 import sys

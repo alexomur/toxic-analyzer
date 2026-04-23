@@ -1,6 +1,5 @@
 """Utilities for loading and splitting the mixed toxicity dataset."""
 
-from __future__ import annotations
 
 import math
 import random
@@ -11,12 +10,13 @@ from typing import Any, Iterable, Sequence
 
 from sklearn.model_selection import train_test_split
 
+from toxic_analyzer.paths import MODEL_ROOT
 from toxic_analyzer.training_data import (
     SQLiteTrainingDataRepository,
     TrainingDataRepository,
 )
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
+ROOT_DIR = MODEL_ROOT
 DEFAULT_MIXED_DATASET_PATH = ROOT_DIR / "data" / "processed" / "mixed_toxic_comments.sqlite3"
 
 

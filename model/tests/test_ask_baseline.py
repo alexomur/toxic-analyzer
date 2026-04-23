@@ -12,11 +12,9 @@ from toxic_analyzer.baseline_model import ToxicityPrediction
 class StubModel:
     def predict_one(self, text: str) -> ToxicityPrediction:
         label = int("идиот" in text.lower())
-        score = 0.9 if label == 1 else 0.8
-        toxic_probability = score if label == 1 else 1.0 - score
+        toxic_probability = 0.9 if label == 1 else 0.2
         return ToxicityPrediction(
             label=label,
-            score=score,
             toxic_probability=toxic_probability,
         )
 
@@ -31,11 +29,12 @@ def test_parse_args_supports_positional_text() -> None:
 def test_format_prediction_uses_human_readable_verdict() -> None:
     rendered = format_prediction(
         "ты идиот",
-        ToxicityPrediction(label=1, score=0.95, toxic_probability=0.95),
+        ToxicityPrediction(label=1, toxic_probability=0.95),
     )
 
     assert "Вердикт модели: токсичный" in rendered
     assert "label: 1" in rendered
+    assert "p(toxic): 0.950000" in rendered
 
 
 def test_interactive_loop_reads_until_exit() -> None:

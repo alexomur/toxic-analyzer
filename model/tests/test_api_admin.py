@@ -1,4 +1,3 @@
-from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -30,10 +29,8 @@ class StubInferenceService:
     def predict_one(self, text: str) -> ToxicityPrediction:
         is_toxic = "toxic" in text.lower() or "idiot" in text.lower()
         toxic_probability = 0.88 if is_toxic else 0.11
-        score = toxic_probability if is_toxic else 1.0 - toxic_probability
         return ToxicityPrediction(
             label=int(is_toxic),
-            score=score,
             toxic_probability=toxic_probability,
         )
 

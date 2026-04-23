@@ -54,7 +54,7 @@ def build_training_db(path: Path) -> None:
         connection.close()
 
 
-def test_train_baseline_model_predicts_label_and_score(tmp_path: Path) -> None:
+def test_train_baseline_model_predicts_label_and_probability(tmp_path: Path) -> None:
     dataset_path = tmp_path / "mixed.sqlite3"
     build_training_db(dataset_path)
     bundle = create_dataset_bundle(dataset_path=dataset_path, random_seed=11)
@@ -74,8 +74,8 @@ def test_train_baseline_model_predicts_label_and_score(tmp_path: Path) -> None:
     prediction = model.predict_one("ты мерзкий тупой человек")
 
     assert prediction.label in {0, 1}
-    assert 0.0 <= prediction.score <= 1.0
     assert 0.0 <= prediction.toxic_probability <= 1.0
+    assert prediction.to_dict().keys() == {"label", "toxic_probability"}
     assert "test" in report["metrics"]
     assert "overall" in report["metrics"]["test"]
 

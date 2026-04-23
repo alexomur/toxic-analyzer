@@ -1,6 +1,5 @@
 """Runtime FastAPI routes for model health and inference."""
 
-from __future__ import annotations
 
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
@@ -77,7 +76,6 @@ async def predict(request: Request, payload: PredictRequest):
     return PredictionResponse(
         id=payload.id,
         label=prediction.label,
-        score=prediction.score,
         toxic_probability=prediction.toxic_probability,
         model_key=identity.model_key,
         model_version=identity.model_version,
@@ -96,7 +94,6 @@ async def predict_batch(request: Request, payload: BatchPredictionRequest):
         BatchPredictionItemResponse(
             id=item.id,
             label=prediction.label,
-            score=prediction.score,
             toxic_probability=prediction.toxic_probability,
         )
         for item, prediction in zip(payload.items, predictions, strict=True)

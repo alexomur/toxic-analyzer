@@ -1,14 +1,14 @@
 """Shared runtime helpers for loading baseline model artifacts."""
 
-from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 from toxic_analyzer.baseline_model import ToxicityBaselineModel
+from toxic_analyzer.paths import MODEL_ROOT
 
-ROOT_DIR: Final[Path] = Path(__file__).resolve().parents[2]
+ROOT_DIR: Final[Path] = MODEL_ROOT
 DEFAULT_MODEL_PATH: Final[Path] = ROOT_DIR / "artifacts" / "baseline_model_v3_3.pkl"
 DEFAULT_FALLBACK_MODEL_PATHS: Final[tuple[Path, ...]] = (
     ROOT_DIR / "artifacts" / "baseline_model_v3_2.pkl",

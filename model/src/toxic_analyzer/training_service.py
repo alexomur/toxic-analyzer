@@ -1,6 +1,5 @@
 """Reusable training service for baseline model CLI and admin flows."""
 
-from __future__ import annotations
 
 import hashlib
 import json
@@ -18,12 +17,13 @@ from toxic_analyzer.baseline_model import (
     train_baseline_model,
 )
 from toxic_analyzer.hard_case_dataset import HardCaseDataset, load_hard_case_dataset
+from toxic_analyzer.paths import MODEL_ROOT
 from toxic_analyzer.training_data import (
     DEFAULT_TRAINING_DATA_CACHE_PATH,
     resolve_training_data_repository,
 )
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
+ROOT_DIR = MODEL_ROOT
 DEFAULT_HARD_CASE_DATASET_PATH = ROOT_DIR / "configs" / "baseline_hard_cases_v3.jsonl"
 DEFAULT_SEED_DATASET_PATH = ROOT_DIR / "configs" / "baseline_seed_examples_v3.jsonl"
 DEFAULT_MODEL_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_model_v3_3.pkl"

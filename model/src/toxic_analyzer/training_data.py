@@ -1,6 +1,5 @@
 """Repository layer for baseline training data."""
 
-from __future__ import annotations
 
 import copy
 import gzip
@@ -11,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
+from toxic_analyzer.paths import MODEL_ROOT
 from toxic_analyzer.postgres_store import (
     TRAINING_DATASET_VIEW_NAME,
     ConnectionFactory,
@@ -20,7 +20,7 @@ from toxic_analyzer.postgres_store import (
     resolve_postgres_settings,
 )
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
+ROOT_DIR = MODEL_ROOT
 DEFAULT_TRAINING_DATA_CACHE_PATH = (
     ROOT_DIR / "data" / "cache" / "baseline_training_dataset.jsonl.gz"
 )

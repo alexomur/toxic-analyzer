@@ -48,11 +48,11 @@ Jupyter Notebook используется как лаборатория: для 
 Текущая задача — бинарная классификация токсичности по одному входу:
 
 - вход: только текст комментария;
-- выход: `label` и `score`;
+- выход: `label` и `toxic_probability`;
 - `label`: `1` для токсичного комментария и `0` для нетоксичного;
-- `score`: число от `0` до `1`, означающее уверенность модели в выбранном ответе.
+- `toxic_probability`: число от `0` до `1`, означающее вероятность токсичности комментария.
 
-`score` не является степенью токсичности. Это именно уверенность модели в том, что итоговый ответ выбран корректно.
+Итоговый `label` получается порогованием `toxic_probability`.
 
 ## Целевой домен и основной датасет
 
@@ -120,7 +120,7 @@ SQL/schema файлы лежат в `sql/postgres/`:
 - word n-grams;
 - char n-grams;
 - `LogisticRegression`;
-- калибровка `score` через validation split.
+- калибровка `toxic_probability` через validation split.
 
 Подробная история эволюции baseline, различия между V1, V2 и V3, реальные трудности модели и инженерные выводы
 вынесены в отдельный документ [MODEL_EVOLUTION.md](C:/Users/Alexomur/Desktop/projects/toxic-analyzer/model/MODEL_EVOLUTION.md).
@@ -263,7 +263,7 @@ train-baseline \
 predict-baseline --text "ты ведёшь себя как идиот"
 ```
 
-Команда печатает JSON с `label`, `score` и `toxic_probability`.
+Команда печатает JSON с `label` и `toxic_probability`.
 По умолчанию используется `artifacts/baseline_model_v3_3.pkl`.
 Для inference PostgreSQL не нужен: команда читает только локальный артефакт модели.
 
@@ -403,15 +403,14 @@ run_prepare_habr_comments.bat --resume --start-shard 8
 Интерфейс baseline-модели должен быть максимально простым:
 
 - `label`: `0` / `1`
-- `score`: число от `0` до `1`, означающее уверенность модели в выбранном ответе
+- `toxic_probability`: число от `0` до `1`, означающее вероятность токсичности
 
 Где:
 
 - `1` означает токсичный комментарий;
 - `0` означает нетоксичный комментарий.
 
-`score` не является степенью токсичности. Это именно уверенность модели в том, что ответ `0` или `1`
-выбран корректно.
+Итоговый `label` получается порогованием `toxic_probability`.
 
 ## Правила разметки
 
@@ -443,7 +442,7 @@ run_prepare_habr_comments.bat --resume --start-shard 8
 - Оскорбление неопределённой группы людей: `Да`, если это враждебное обобщение, даже без конкретного имени.
 
 Если текст пограничный, приоритет у более консервативной разметки: без явной направленной агрессии ставится `Нет`.
-В таких случаях `score` может быть ниже из-за неопределённости.
+В таких случаях `toxic_probability` может оставаться ближе к порогу из-за неопределённости.
 
 ## FastAPI runtime
 
@@ -469,6 +468,26 @@ serve-model-api --host 127.0.0.1 --port 8000
 - `GET /v1/admin/jobs`
 
 Для `retrain` и job-status должен быть настроен PostgreSQL training store через `TOXIC_ANALYZER_POSTGRES_DSN` или совместимый набор env vars. Runtime inference по-прежнему читает только локальный артефакт модели.
+
+### Docker runtime
+
+Контейнер для внутреннего FastAPI runtime можно собрать прямо из корня репозитория:
+
+```bash
+docker build -t toxic-analyzer-model:local ./model
+```
+
+Запуск контейнера:
+
+```bash
+docker run --rm -p 8000:8000 --name toxic-analyzer-model toxic-analyzer-model:local
+```
+
+Что важно:
+
+- образ ожидает локальный артефакт в `model/artifacts/`, обычно `baseline_model_v3_3.pkl`;
+- Docker healthcheck внутри образа смотрит в `GET /health/ready`;
+- для `retrain` и job-status можно пробросить PostgreSQL через `-e TOXIC_ANALYZER_POSTGRES_DSN=...` или совместимый набор env vars.
 
 ## Короткий guide для ручной разметки
 

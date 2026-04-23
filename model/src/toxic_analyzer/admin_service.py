@@ -1,6 +1,5 @@
 """Admin service layer for retrain jobs and model registry access."""
 
-from __future__ import annotations
 
 import json
 import threading

@@ -1,6 +1,5 @@
 """PostgreSQL settings and helpers for model training data storage."""
 
-from __future__ import annotations
 
 import os
 import re
@@ -9,7 +8,9 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 from urllib.parse import quote, urlsplit, urlunsplit
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
+from toxic_analyzer.paths import MODEL_ROOT
+
+ROOT_DIR = MODEL_ROOT
 DEFAULT_POSTGRES_SCHEMA = "toxic_analyzer_model"
 TRAINING_DATASET_VIEW_NAME = "training_examples_for_training"
 

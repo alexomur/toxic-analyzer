@@ -1,6 +1,5 @@
 """Run inference with a saved baseline toxicity model."""
 
-from __future__ import annotations
 
 import argparse
 import json

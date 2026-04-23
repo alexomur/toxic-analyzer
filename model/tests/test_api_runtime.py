@@ -1,4 +1,3 @@
-from __future__ import annotations
 
 from pathlib import Path
 
@@ -18,10 +17,8 @@ class StubInferenceService:
     def predict_one(self, text: str) -> ToxicityPrediction:
         is_toxic = "toxic" in text.lower() or "idiot" in text.lower()
         toxic_probability = 0.91 if is_toxic else 0.14
-        score = toxic_probability if is_toxic else 1.0 - toxic_probability
         return ToxicityPrediction(
             label=int(is_toxic),
-            score=score,
             toxic_probability=toxic_probability,
         )
 
@@ -125,7 +122,6 @@ def test_runtime_predict_endpoints_expose_model_identity_and_preserve_batch_orde
     assert predict_response.json() == {
         "id": "single-1",
         "label": 1,
-        "score": 0.91,
         "toxic_probability": 0.91,
         "model_key": "baseline-a",
         "model_version": "v3.3",

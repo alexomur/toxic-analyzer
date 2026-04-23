@@ -1,6 +1,5 @@
 """Helpers for loading and evaluating curated hard-case examples."""
 
-from __future__ import annotations
 
 import json
 from dataclasses import dataclass

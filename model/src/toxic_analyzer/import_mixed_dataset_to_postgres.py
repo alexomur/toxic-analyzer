@@ -1,6 +1,5 @@
 """Import the legacy mixed SQLite dataset into PostgreSQL canonical training texts."""
 
-from __future__ import annotations
 
 import argparse
 import json

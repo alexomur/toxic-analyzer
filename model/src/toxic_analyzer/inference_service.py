@@ -1,6 +1,5 @@
 """Service layer for model inference, ready to be reused by future FastAPI handlers."""
 
-from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
