@@ -4,6 +4,116 @@
 Её цель — разработать и воспроизвести baseline-модель для бинарной классификации токсичности.
 Каталог должен быть самодостаточным для Python-tooling и удобным как отдельный рабочий `cwd`.
 
+## Быстрый старт: полный pipeline запуска
+
+Ниже — краткий сквозной сценарий от подготовки окружения до обучения baseline и включения интерактивного режима.
+Сначала показан путь через Docker, затем ручной путь через уже существующий PostgreSQL.
+
+### Вариант 1: через Docker
+
+Этот вариант удобен, если нужен изолированный локальный PostgreSQL для model-пайплайна.
+Все команды ниже предполагают, что текущий каталог — `model/`.
+
+1. Установить Python-зависимости:
+
+```bash
+python -m pip install -e .[dev]
+```
+
+2. Поднять локальный PostgreSQL в Docker:
+
+```bash
+docker volume create toxic-analyzer-postgres-e2e-data
+docker run -d \
+  --name toxic-analyzer-postgres-e2e \
+  -e POSTGRES_DB=toxic_analyzer_e2e \
+  -e POSTGRES_USER=toxic_model \
+  -e POSTGRES_PASSWORD=toxic_model_pw \
+  -p 127.0.0.1:55432:5432 \
+  --health-cmd "pg_isready -U toxic_model -d toxic_analyzer_e2e" \
+  --health-interval 5s \
+  --health-timeout 3s \
+  --health-retries 20 \
+  -v toxic-analyzer-postgres-e2e-data:/var/lib/postgresql/data \
+  postgres:17
+```
+
+3. Создать schema training store и, если нужно, импортировать legacy dataset:
+
+```bash
+apply-training-store-schema --postgres-dsn "postgresql://toxic_model:toxic_model_pw@127.0.0.1:55432/toxic_analyzer_e2e"
+import-mixed-dataset-to-postgres --postgres-dsn "postgresql://toxic_model:toxic_model_pw@127.0.0.1:55432/toxic_analyzer_e2e"
+```
+
+4. Настроить DSN для последующих команд:
+
+```powershell
+$env:TOXIC_ANALYZER_POSTGRES_DSN="postgresql://toxic_model:toxic_model_pw@127.0.0.1:55432/toxic_analyzer_e2e"
+```
+
+5. Обучить baseline от PostgreSQL:
+
+```bash
+train-baseline --data-source postgres
+```
+
+6. Проверить одиночный inference:
+
+```bash
+predict-baseline --text "ты ведешь себя как идиот"
+```
+
+7. Включить интерактивный режим:
+
+```bash
+ask-baseline
+```
+
+После этого можно вводить фразы по одной. Выход — пустая строка или `exit`.
+
+### Вариант 2: ручной путь через уже существующий PostgreSQL
+
+Этот вариант подходит для "сухого" старта, когда репозиторий только что получен, а PostgreSQL уже развернут и хранит данные.
+Все команды ниже тоже предполагают работу из `model/`.
+
+1. Установить Python-зависимости:
+
+```bash
+python -m pip install -e .[dev]
+```
+
+2. Указать подключение к уже существующей БД:
+
+```powershell
+$env:TOXIC_ANALYZER_POSTGRES_DSN="postgresql://user:pass@host:5432/toxic_analyzer"
+```
+
+3. Если schema training store ещё не применялась, создать её один раз:
+
+```bash
+apply-training-store-schema --postgres-dsn "postgresql://user:pass@host:5432/toxic_analyzer"
+```
+
+4. Если данные уже лежат в PostgreSQL в ожидаемой схеме, сразу обучить baseline:
+
+```bash
+train-baseline --data-source postgres
+```
+
+5. Проверить одиночный inference:
+
+```bash
+predict-baseline --text "ты ведешь себя как идиот"
+```
+
+6. Включить интерактивный режим:
+
+```bash
+ask-baseline
+```
+
+По умолчанию обучение сохраняет модель в `artifacts/baseline_model_v3_3.pkl`, а интерактивный режим читает именно локальный `.pkl`-артефакт, а не PostgreSQL.
+
 ## Роли каталогов
 
 - `notebooks/` — исследования и эксперименты
