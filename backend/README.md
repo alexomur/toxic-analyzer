@@ -4,10 +4,11 @@
 
 ## Текущий статус
 
-- Технологический стек: ASP.NET Core Web API на `net8.0`
+- Технологический стек: ASP.NET Core Web API на `net10.0`
 - Solution: `ToxicAnalyzer.sln`
 - Основной проект: `ToxicAnalyzer.Api`
 - Сейчас в проекте находится стартовый каркас API без доменной логики
+- MVP API-обязательства backend: `backend/API_CONTRACTS.md`
 
 ## Зона ответственности
 
@@ -34,3 +35,9 @@ dotnet run --project .\ToxicAnalyzer.Api\ToxicAnalyzer.Api.csproj
 - заменить шаблонные endpoint'ы на доменные API-контракты
 - подключить конфигурацию для вызовов `model`
 - ввести явные application и infrastructure слои по мере появления реальных сценариев
+
+## MVP API notes
+
+- Текущий backend MVP работает без пользовательской auth.
+- Для production-доступа со стороны Discord bot и других внешних клиентов стоит добавить простой API key слой на уровне `backend`.
+- OpenAPI-описание для локальной разработки доступно в development environment по пути `/openapi/v1.json`.
