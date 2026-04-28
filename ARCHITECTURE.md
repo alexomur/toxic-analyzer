@@ -1,202 +1,82 @@
 # Planned Architecture
 
-Этот документ фиксирует целевую архитектуру проекта, чтобы следующий разработчик или ИИ-агент понимал,
-как должны соотноситься `model`, `backend` и `frontend`.
+This document describes the target architecture of the project. It is a boundary document, not an implementation checklist for the current `model-first` stage.
 
-Документ описывает именно планируемую архитектуру, а не текущую степень реализации.
+## Current reality
 
-## Current Stage
+- Active development is limited to `model/`.
+- `backend/` and `frontend/` are placeholders for future work.
+- The current goal is a reproducible baseline model with a narrow internal runtime.
 
-Сейчас активная реализация всё ещё сосредоточена в `model/`.
-Это не отменяет `model-first` границ из `AGENTS.md`: архитектурный план нужен как ориентир, а не как команда
-немедленно реализовывать весь продукт.
-
-## Planned Services
-
-В проекте предполагаются три слоя:
-
-- `model/` — Python-сервис вокруг модели токсичности;
-- `backend/` — основной backend сервиса на C#;
-- `frontend/` — пользовательский интерфейс.
-
-## Responsibilities
+## Planned services
 
 ### `model`
 
-`model` должен остаться узким приватным сервисом вокруг ML-слоя.
+Internal Python service around the toxicity model.
 
-Его зона ответственности:
+Responsibilities:
 
-- загрузка локального артефакта модели;
-- single inference по одному тексту;
-- batch inference по набору текстов;
-- внутренние административные операции вокруг retrain/reload;
-- train/retrain pipeline на стороне Python.
+- load local model artifacts
+- run single and batch inference
+- expose internal admin operations such as `reload` and `retrain`
+- own training and retraining pipelines
 
-Что не должно жить в `model`:
+Out of scope:
 
-- публичный product API;
-- пользовательская бизнес-логика;
-- аналитические витрины;
-- хранение пользовательских сессий, профилей и основной сервисной статистики.
+- public product API
+- user-facing business logic
+- feedback storage as product behavior
+- frontend-facing analytics
 
 ### `backend`
 
-`backend` на C# — это основной backend всего продукта.
+Future product backend.
 
-Его зона ответственности:
+Responsibilities:
 
-- публичное API для `frontend`;
-- авторизация, бизнес-логика и orchestration;
-- запись пользовательских оценок результатов модели;
-- выдача случайных текстов для оценки;
-- агрегации и аналитика;
-- вызов внутренних ручек `model` для retrain/reload и получения статусов job.
-
-`backend` не должен обучать модель сам. Он только инициирует и контролирует процессы, которые выполняет `model`.
+- public API for the frontend
+- orchestration, authorization, and product logic
+- storing feedback and product data
+- calling the internal `model` service
 
 ### `frontend`
 
-`frontend` работает только с `backend`, а не с `model` напрямую.
-API `model` считается внутренним и должен быть закрыт от прямого пользовательского доступа.
+Future user interface. It should communicate with `backend`, not directly with `model`.
 
-## Planned User Scenarios
+## Internal contract between `backend` and `model`
 
-### In `model`
+The `model` service should stay narrow and predictable.
 
-- проверить один текст на токсичность;
-- проверить набор текстов на токсичность;
-- в будущем запустить retrain/reload через внутренние admin-ручки.
+Expected runtime operations:
 
-### In `frontend` + `backend`
+- `GET /health/live`
+- `GET /health/ready`
+- `GET /v1/model/info`
+- `POST /v1/predict`
+- `POST /v1/predict/batch`
 
-- проверить один пользовательский текст;
-- сохранить пользовательскую оценку ответа модели;
-- получить аналитику по набору пользовательских текстов;
-- получить случайную фразу для оценки;
-- сохранить пользовательскую оценку случайной фразы и после этого показать мнение модели.
+Expected admin operations:
 
-## Planned Internal Contract Between `backend` and `model`
+- `POST /v1/admin/reload`
+- `POST /v1/admin/retrain`
+- `GET /v1/admin/jobs/{job_key}`
+- `GET /v1/admin/jobs`
 
-Граница между `backend` и `model` должна оставаться узкой и предсказуемой.
+Inference responses should expose:
 
-Что `backend` вызывает у `model`:
+- binary `label`
+- `toxic_probability`
+- `model_key`
+- `model_version`
 
-- single inference по одному тексту;
-- batch inference по набору текстов;
-- внутренние admin-операции `reload` / `retrain`;
-- получение статуса retrain job и активной модели.
+## Data boundaries
 
-Что `backend` не делегирует в `model`:
+- Model weights stay in local artifacts under `model/`.
+- PostgreSQL is the shared store for training texts, curated candidates, feedback-derived data, model registry metadata, and retrain jobs.
+- PostgreSQL is not the storage for binary model weights.
 
-- публичные пользовательские сценарии;
-- авторизацию и бизнес-правила;
-- сохранение feedback;
-- аналитические агрегации;
-- выбор случайных текстов для оценки.
+## Near-term direction
 
-Ключевые договорённости по контракту:
-
-- API `model` является внутренним и вызывается только из `backend`;
-- основной вход для inference — только текст комментария или набор текстов;
-- основной результат inference — `label` и `score`;
-- `score` означает уверенность модели в выбранном бинарном ответе, а не степень токсичности;
-- внутренний ответ `model` может дополнительно содержать `toxic_probability` как диагностическое поле;
-- ответ `model` должен содержать идентичность активной модели, минимум `model_key` и `model_version`, чтобы `backend` мог корректно связывать пользовательский feedback с конкретной моделью;
-- batch-inference должен как минимум сохранять порядок входных элементов, а лучше ещё поддерживать клиентский `id` на элемент;
-- feedback записывает `backend` в PostgreSQL; `model` не должен получать feedback через inference-ручки;
-- `model` читает PostgreSQL для train/retrain, реестра моделей и job-статусов, но не использует PostgreSQL как хранилище бинарных весов.
-
-## Planned FastAPI Endpoints In `model`
-
-Планируемый лёгкий FastAPI-слой в `model` должен покрывать только внутренние ML-сценарии.
-
-### Runtime endpoints
-
-- `GET /health/live` — процесс сервиса жив;
-- `GET /health/ready` — сервис готов принимать запросы, модель загружена;
-- `GET /v1/model/info` — информация об активной модели: `model_key`, `model_version`, `threshold`, `calibration_method`, конфиг обучения;
-- `POST /v1/predict` — single inference по одному тексту;
-- `POST /v1/predict/batch` — batch inference по набору текстов.
-
-### Admin endpoints
-
-- `POST /v1/admin/reload` — перезагрузить активную модель без рестарта сервиса;
-- `POST /v1/admin/retrain` — запустить retrain как асинхронную job;
-- `GET /v1/admin/jobs/{job_key}` — получить статус retrain job;
-- `GET /v1/admin/jobs` — опционально получить список последних job для внутреннего мониторинга.
-
-### Contract notes for response payloads
-
-Для single и batch inference внутренний HTTP-контракт должен опираться на уже существующий программный слой внутри `model`:
-
-- предсказание включает `label`, `score`, `toxic_probability`;
-- метаданные ответа включают `model_key` и `model_version`;
-- для batch-ответа каждому элементу желательно возвращать `id`, если он был передан во входе;
-- ошибки отсутствия локального артефакта модели должны возвращаться как технические ошибки readiness/runtime, а не маскироваться под обычный inference-ответ.
-
-## Data Strategy
-
-### Model Weights
-
-Веса модели не планируется хранить в PostgreSQL.
-Они должны оставаться локальными артефактами внутри `model` и загружаться Python-сервисом напрямую.
-
-Примеры:
-
-- `model/artifacts/*.pkl`
-- в будущем volume или отдельное artifact storage
-
-### Text Data and Feedback
-
-Тексты, метки, feedback и служебные записи для retrain должны быть вынесены в PostgreSQL.
-
-Причина:
-
-- пользовательские оценки должны использоваться в feedback loop;
-- `backend` и `model` должны работать с общим источником истины по текстовым данным;
-- решение должно работать и на одной машине, и при разнесении сервисов по разным хостам.
-
-## Planned PostgreSQL Role
-
-PostgreSQL рассматривается как общее хранилище для:
-
-- canonical training texts;
-- пользовательского feedback;
-- кандидатов на пополнение train set;
-- пула текстов для пользовательской оценки;
-- реестра моделей;
-- retrain jobs.
-
-При этом PostgreSQL не используется как хранилище бинарных весов модели.
-
-## Feedback Loop
-
-Планируемый поток данных:
-
-1. пользователь оценивает ответ модели через `frontend` и `backend`;
-2. `backend` сохраняет feedback в PostgreSQL;
-3. curated/approved данные попадают в training corpus;
-4. `backend` инициирует retrain у `model`;
-5. `model` читает training data из PostgreSQL, обучает новую модель и сохраняет новый локальный артефакт.
-
-Важно: пользовательский feedback не должен автоматически становиться финальной train-меткой без промежуточного
-слоя review/approval.
-
-## Deployment Assumptions
-
-- на машине разработчика уже могут существовать другие PostgreSQL-инстансы;
-- новые окружения нельзя поднимать разрушительно по отношению к уже существующим данным;
-- `model` и PostgreSQL могут находиться на одной машине;
-- архитектура должна допускать разнос `model`, `backend` и PostgreSQL по разным машинам.
-
-Поэтому подключение к PostgreSQL должно строиться через конфиг/DSN, а не через жёсткую привязку к `localhost`.
-
-## Near-Term Direction
-
-Ближайший инженерный фокус:
-
-- держать `model` готовым к лёгкому FastAPI-слою;
-- не тащить product-логику в Python model-service;
-- постепенно готовить `model` к работе с PostgreSQL как источником training data;
-- сохранять CLI-инструменты для train и локального inference.
+- Keep the model runtime thin.
+- Reuse the same Python service layer from both CLI and HTTP.
+- Prepare `model/` for PostgreSQL-backed training without pulling product concerns into it.
