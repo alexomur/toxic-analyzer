@@ -83,11 +83,19 @@ Useful endpoints:
 - `GET /health/ready`
 - `GET /v1/model/info`
 - `POST /v1/predict`
+- `POST /v1/predict/explain`
 - `POST /v1/predict/batch`
 - `POST /v1/admin/reload`
 - `POST /v1/admin/retrain`
+- `GET /v1/admin/jobs/{job_key}`
+- `GET /v1/admin/jobs`
 
-Inference requires a local model artifact. Retrain and job-status endpoints additionally require PostgreSQL access.
+Notes:
+
+- Inference endpoints require a local model artifact.
+- `POST /v1/predict/explain` returns the prediction plus feature-level explanation fields.
+- Admin endpoints are available only when the app is started with PostgreSQL settings that allow `RetrainAdminService` to be configured.
+- Retrain and job-status endpoints additionally require PostgreSQL access.
 
 ## Docker runtime
 

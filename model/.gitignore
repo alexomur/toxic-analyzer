@@ -24,6 +24,7 @@ dist/
 .coverage.*
 htmlcov/
 .hypothesis/
+test-temp-local/
 
 # Jupyter
 .ipynb_checkpoints/

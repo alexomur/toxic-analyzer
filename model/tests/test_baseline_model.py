@@ -1,9 +1,7 @@
 import json
 import sqlite3
 from pathlib import Path
-from uuid import uuid4
 
-import pytest
 from toxic_analyzer.baseline_data import create_dataset_bundle
 from toxic_analyzer.baseline_model import (
     BaselineTrainingConfig,
@@ -54,14 +52,6 @@ def build_training_db(path: Path) -> None:
         connection.commit()
     finally:
         connection.close()
-
-
-@pytest.fixture
-def workspace_tmp_dir() -> Path:
-    root = Path("test-temp") / f"baseline-model-{uuid4().hex}"
-    root.mkdir(parents=True, exist_ok=True)
-    return root
-
 
 def test_train_baseline_model_predicts_label_and_probability(workspace_tmp_dir: Path) -> None:
     dataset_path = workspace_tmp_dir / "mixed.sqlite3"

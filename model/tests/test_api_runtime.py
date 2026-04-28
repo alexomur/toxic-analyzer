@@ -1,7 +1,5 @@
 from pathlib import Path
-from uuid import uuid4
 
-import pytest
 from fastapi.testclient import TestClient
 
 from toxic_analyzer.api.app import create_app
@@ -108,14 +106,6 @@ def _build_runtime_state(
         service_loader=service_loader,
     )
 
-
-@pytest.fixture
-def workspace_tmp_dir() -> Path:
-    root = Path("test-temp") / f"api-runtime-{uuid4().hex}"
-    root.mkdir(parents=True, exist_ok=True)
-    return root
-
-
 def test_runtime_reports_not_ready_when_model_missing(workspace_tmp_dir: Path) -> None:
     missing_path = workspace_tmp_dir / "missing-model.pkl"
     runtime_state = _build_runtime_state(default_model_path=missing_path, service_map={})
@@ -206,5 +196,11 @@ def test_runtime_predict_endpoints_expose_model_identity_and_preserve_batch_orde
     assert explain_payload["calibrated_probability"] == 0.92
     assert explain_payload["threshold"] == 0.42
     assert explain_payload["model_key"] == "baseline-a"
-    assert explain_payload["explanation"]["top_positive_features"][0]["feature_group"] == "word_ngram"
-    assert explain_payload["explanation"]["applied_adjustments"][0]["adjustment_name"] == "second_person_negated_insult"
+    assert (
+        explain_payload["explanation"]["top_positive_features"][0]["feature_group"]
+        == "word_ngram"
+    )
+    assert (
+        explain_payload["explanation"]["applied_adjustments"][0]["adjustment_name"]
+        == "second_person_negated_insult"
+    )

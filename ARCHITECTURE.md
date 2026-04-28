@@ -53,6 +53,7 @@ Expected runtime operations:
 - `GET /health/ready`
 - `GET /v1/model/info`
 - `POST /v1/predict`
+- `POST /v1/predict/explain`
 - `POST /v1/predict/batch`
 
 Expected admin operations:
@@ -68,6 +69,12 @@ Inference responses should expose:
 - `toxic_probability`
 - `model_key`
 - `model_version`
+
+The explain operation should additionally expose:
+
+- calibrated and posthoc-adjusted probabilities
+- active threshold
+- feature-level explanation details
 
 ## Data boundaries
 
