@@ -3,6 +3,7 @@
 
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from functools import lru_cache
 
 import numpy as np
@@ -174,6 +175,30 @@ FEATURE_NAMES = [
 ]
 
 
+@dataclass(slots=True)
+class ExpertFeatureEvidence:
+    feature_name: str
+    feature_value: float
+    reasons: list[str]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "feature_name": self.feature_name,
+            "feature_value": round(self.feature_value, 6),
+            "reasons": list(self.reasons),
+        }
+
+
+@dataclass(slots=True)
+class ExpertFeatureDiagnostics:
+    canonical_tokens: list[str]
+    triggered_features: list[ExpertFeatureEvidence]
+
+    def to_feature_row(self, feature_names: Sequence[str]) -> list[float]:
+        values = {item.feature_name: item.feature_value for item in self.triggered_features}
+        return [float(values.get(name, 0.0)) for name in feature_names]
+
+
 def _count_matches(tokens: Sequence[str], vocabulary: set[str]) -> int:
     return sum(1 for token in tokens if token in vocabulary)
 
@@ -325,7 +350,11 @@ class ExpertFeatureTransformer(BaseEstimator, TransformerMixin):
             float(has_short_targeted_attack),
         ]
 
-    def _build_current_row(self, lowered: str, tokens: Sequence[str]) -> list[float]:
+    def _build_current_diagnostics(
+        self,
+        lowered: str,
+        tokens: Sequence[str],
+    ) -> ExpertFeatureDiagnostics:
         token_count = len(tokens)
         canonical_tokens = [canonicalize_token(token) for token in tokens]
         canonical_text = " ".join(canonical_tokens)
@@ -369,26 +398,138 @@ class ExpertFeatureTransformer(BaseEstimator, TransformerMixin):
                 or (strong_insult_count > 0 and second_person_count > 0)
             )
         )
-        return [
-            float(token_count),
-            float(lowered.count("!")),
-            float(lowered.count("?")),
-            float(second_person_count),
-            float(mild_insult_count),
-            float(strong_insult_count),
-            float(profane_count),
-            float(identity_term_count),
-            float(harm_term_count),
-            float(imperative_count),
-            float(has_dismissive_pattern),
-            float(has_second_person_negated_insult),
-            float(has_pronoun_insult),
-            float(has_pronoun_profanity),
-            float(has_identity_dismissal),
-            float(has_targeted_harm),
-            float(has_untargeted_harm),
-            float(has_short_targeted_attack),
+
+        matched_mild_insults = [
+            token
+            for index, token in enumerate(canonical_tokens)
+            if token in MILD_INSULT_WORDS and index not in negated_insult_indices
         ]
+        matched_strong_insults = [
+            token
+            for index, token in enumerate(canonical_tokens)
+            if token in STRONG_INSULT_WORDS and index not in negated_insult_indices
+        ]
+        matched_profanities = [token for token in canonical_tokens if token in PROFANE_WORDS]
+        matched_identity_terms = [token for token in canonical_tokens if token in IDENTITY_TERMS]
+        matched_harm_terms = [token for token in canonical_tokens if token in HARM_NOUN_WORDS]
+        matched_imperatives = [token for token in canonical_tokens if token in IMPERATIVE_CUES]
+        matched_second_person = [token for token in canonical_tokens if token in SECOND_PERSON_WORDS]
+        matched_patterns = [
+            f"pattern:{pattern.pattern}"
+            for pattern in DISMISSIVE_PATTERNS
+            if pattern.search(canonical_text) is not None
+        ]
+        negated_tokens = [canonical_tokens[index] for index in sorted(negated_insult_indices)]
+
+        feature_rows = [
+            ExpertFeatureEvidence(
+                feature_name="token_count",
+                feature_value=float(token_count),
+                reasons=[f"token_count:{token_count}"],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="exclamation_count",
+                feature_value=float(lowered.count("!")),
+                reasons=[f"char:!:{lowered.count('!')}"] if "!" in lowered else [],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="question_count",
+                feature_value=float(lowered.count("?")),
+                reasons=[f"char:?:{lowered.count('?')}"] if "?" in lowered else [],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="second_person_count",
+                feature_value=float(second_person_count),
+                reasons=[f"token:{token}" for token in matched_second_person],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="mild_insult_count",
+                feature_value=float(mild_insult_count),
+                reasons=[f"token:{token}" for token in matched_mild_insults],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="strong_insult_count",
+                feature_value=float(strong_insult_count),
+                reasons=[f"token:{token}" for token in matched_strong_insults],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="profane_count",
+                feature_value=float(profane_count),
+                reasons=[f"token:{token}" for token in matched_profanities],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="identity_term_count",
+                feature_value=float(identity_term_count),
+                reasons=[f"token:{token}" for token in matched_identity_terms],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="harm_term_count",
+                feature_value=float(harm_term_count),
+                reasons=[f"token:{token}" for token in matched_harm_terms],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="imperative_count",
+                feature_value=float(imperative_count),
+                reasons=[f"token:{token}" for token in matched_imperatives],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="has_dismissive_pattern",
+                feature_value=float(has_dismissive_pattern),
+                reasons=matched_patterns,
+            ),
+            ExpertFeatureEvidence(
+                feature_name="has_second_person_negated_insult",
+                feature_value=float(has_second_person_negated_insult),
+                reasons=[*([f"token:{token}" for token in matched_second_person]), *([f"negated_token:{token}" for token in negated_tokens])],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="has_pronoun_insult",
+                feature_value=float(has_pronoun_insult),
+                reasons=[*([f"token:{token}" for token in matched_second_person]), *([f"insult_token:{token}" for token in matched_mild_insults + matched_strong_insults])],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="has_pronoun_profanity",
+                feature_value=float(has_pronoun_profanity),
+                reasons=[*([f"token:{token}" for token in matched_second_person]), *([f"profanity_token:{token}" for token in matched_profanities])],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="has_identity_dismissal",
+                feature_value=float(has_identity_dismissal),
+                reasons=(["phrase:спросить забыли"] if "спросить забыли" in canonical_text else []) + [f"token:{token}" for token in matched_identity_terms],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="has_targeted_harm",
+                feature_value=float(has_targeted_harm),
+                reasons=[f"token:{token}" for token in matched_harm_terms] + [f"recipient:{token}" for token in canonical_tokens if _is_harm_recipient(token)],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="has_untargeted_harm",
+                feature_value=float(has_untargeted_harm),
+                reasons=[f"token:{token}" for token in matched_harm_terms],
+            ),
+            ExpertFeatureEvidence(
+                feature_name="has_short_targeted_attack",
+                feature_value=float(has_short_targeted_attack),
+                reasons=[f"token_count:{token_count}", "composite:short_targeted_attack"],
+            ),
+        ]
+        triggered = [
+            item
+            for item in feature_rows
+            if item.feature_value != 0.0 or item.feature_name == "token_count"
+        ]
+        return ExpertFeatureDiagnostics(
+            canonical_tokens=canonical_tokens,
+            triggered_features=triggered,
+        )
+
+    def analyze_text(self, text: str) -> ExpertFeatureDiagnostics:
+        lowered = str(text).lower()
+        tokens = TOKEN_PATTERN.findall(lowered)
+        feature_layout_version = getattr(self, "feature_layout_version", 2)
+        if feature_layout_version <= 2:
+            raise ValueError("Expert diagnostics are only supported for feature layout version 3.")
+        return self._build_current_diagnostics(lowered, tokens)
 
     def transform(self, texts: Sequence[str]) -> csr_matrix:
         rows: list[list[float]] = []
@@ -399,7 +540,9 @@ class ExpertFeatureTransformer(BaseEstimator, TransformerMixin):
             if feature_layout_version <= 2:
                 rows.append(self._build_legacy_row(lowered, tokens))
             else:
-                rows.append(self._build_current_row(lowered, tokens))
+                rows.append(
+                    self._build_current_diagnostics(lowered, tokens).to_feature_row(FEATURE_NAMES)
+                )
         return csr_matrix(np.asarray(rows, dtype=np.float64))
 
     def get_feature_names_out(self, input_features: Sequence[str] | None = None) -> np.ndarray:

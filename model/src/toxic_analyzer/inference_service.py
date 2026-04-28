@@ -5,7 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-from toxic_analyzer.baseline_model import ToxicityBaselineModel, ToxicityPrediction
+from toxic_analyzer.baseline_model import (
+    ExplainedToxicityPrediction,
+    ToxicityBaselineModel,
+    ToxicityPrediction,
+)
 from toxic_analyzer.model_runtime import (
     DEFAULT_ARTIFACT_PATHS,
     DEFAULT_MODEL_PATH,
@@ -77,6 +81,9 @@ class ToxicityInferenceService:
     def predict_many(self, texts: Sequence[str]) -> list[ToxicityPrediction]:
         return self.model.predict(list(texts))
 
+    def predict_one_explained(self, text: str, *, top_n: int = 10) -> ExplainedToxicityPrediction:
+        return self.model.predict_one_explained(text, top_n=top_n)
+
     def predict_batch(self, texts: Sequence[str]) -> list[BatchPredictionItem]:
         predictions = self.predict_many(texts)
         return [
@@ -93,6 +100,12 @@ class ToxicityInferenceService:
     def build_batch_response_payload(self, texts: Sequence[str]) -> dict[str, object]:
         return {
             "items": [item.to_dict() for item in self.predict_batch(texts)],
+        }
+
+    def build_explain_response_payload(self, text: str, *, top_n: int = 10) -> dict[str, object]:
+        return {
+            "text": text,
+            "prediction": self.predict_one_explained(text, top_n=top_n).to_dict(),
         }
 
     def get_model_identity(self) -> ModelIdentity:

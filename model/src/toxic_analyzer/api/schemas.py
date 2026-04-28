@@ -51,6 +51,60 @@ class PredictionResponse(ApiSchema):
     model_version: str
 
 
+class ExplainPredictRequest(ApiSchema):
+    id: str | int | None = None
+    text: str = Field(min_length=1)
+    top_n: int = Field(default=10, ge=1, le=100)
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("text must not be blank.")
+        return value
+
+
+class ExplainFeatureResponse(ApiSchema):
+    feature_group: Literal["word_ngram", "char_ngram", "expert_feature"]
+    feature_name: str
+    feature_value: float
+    feature_weight: float
+    contribution: float
+
+
+class TriggeredExpertFeatureResponse(ApiSchema):
+    feature_name: str
+    feature_value: float
+    reasons: list[str]
+
+
+class AppliedAdjustmentResponse(ApiSchema):
+    adjustment_name: str
+    delta: float
+    trigger_features: list[str]
+
+
+class PredictionExplanationResponse(ApiSchema):
+    canonical_tokens: list[str]
+    top_positive_features: list[ExplainFeatureResponse]
+    top_negative_features: list[ExplainFeatureResponse]
+    triggered_expert_features: list[TriggeredExpertFeatureResponse]
+    applied_adjustments: list[AppliedAdjustmentResponse]
+
+
+class ExplainPredictionResponse(ApiSchema):
+    id: str | int | None = None
+    label: int
+    toxic_probability: float
+    raw_model_probability: float
+    calibrated_probability: float
+    posthoc_adjusted_probability: float
+    threshold: float
+    model_key: str
+    model_version: str
+    explanation: PredictionExplanationResponse
+
+
 class BatchPredictionItemRequest(ApiSchema):
     id: str | int | None = None
     text: str = Field(min_length=1)

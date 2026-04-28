@@ -1,7 +1,9 @@
 import json
 import sqlite3
 from pathlib import Path
+from uuid import uuid4
 
+import pytest
 from toxic_analyzer.baseline_data import create_dataset_bundle
 from toxic_analyzer.baseline_model import (
     BaselineTrainingConfig,
@@ -54,8 +56,15 @@ def build_training_db(path: Path) -> None:
         connection.close()
 
 
-def test_train_baseline_model_predicts_label_and_probability(tmp_path: Path) -> None:
-    dataset_path = tmp_path / "mixed.sqlite3"
+@pytest.fixture
+def workspace_tmp_dir() -> Path:
+    root = Path("test-temp") / f"baseline-model-{uuid4().hex}"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def test_train_baseline_model_predicts_label_and_probability(workspace_tmp_dir: Path) -> None:
+    dataset_path = workspace_tmp_dir / "mixed.sqlite3"
     build_training_db(dataset_path)
     bundle = create_dataset_bundle(dataset_path=dataset_path, random_seed=11)
 
@@ -80,8 +89,8 @@ def test_train_baseline_model_predicts_label_and_probability(tmp_path: Path) -> 
     assert "overall" in report["metrics"]["test"]
 
 
-def test_baseline_model_roundtrip_preserves_predictions(tmp_path: Path) -> None:
-    dataset_path = tmp_path / "mixed.sqlite3"
+def test_baseline_model_roundtrip_preserves_predictions(workspace_tmp_dir: Path) -> None:
+    dataset_path = workspace_tmp_dir / "mixed.sqlite3"
     build_training_db(dataset_path)
     bundle = create_dataset_bundle(dataset_path=dataset_path, random_seed=13)
 
@@ -96,7 +105,7 @@ def test_baseline_model_roundtrip_preserves_predictions(tmp_path: Path) -> None:
             threshold_grid_size=41,
         ),
     )
-    model_path = tmp_path / "baseline.pkl"
+    model_path = workspace_tmp_dir / "baseline.pkl"
     model.save(model_path)
     restored = ToxicityBaselineModel.load(model_path)
 
@@ -106,10 +115,78 @@ def test_baseline_model_roundtrip_preserves_predictions(tmp_path: Path) -> None:
     assert original.to_dict() == reloaded.to_dict()
 
 
-def test_train_baseline_model_reports_hard_case_metrics(tmp_path: Path) -> None:
-    dataset_path = tmp_path / "mixed.sqlite3"
+def test_baseline_model_explain_prediction_returns_feature_groups_and_trace(
+    workspace_tmp_dir: Path,
+) -> None:
+    dataset_path = workspace_tmp_dir / "mixed.sqlite3"
     build_training_db(dataset_path)
-    hard_case_path = tmp_path / "hard_cases.jsonl"
+    bundle = create_dataset_bundle(dataset_path=dataset_path, random_seed=23)
+
+    model, _ = train_baseline_model(
+        bundle,
+        config=BaselineTrainingConfig(
+            random_seed=23,
+            min_df=1,
+            max_word_features=500,
+            max_char_features=500,
+            select_k_best=200,
+            threshold_grid_size=41,
+        ),
+    )
+
+    explained = model.predict_one_explained("ты мудак")
+
+    assert explained.label in {0, 1}
+    assert 0.0 <= explained.raw_model_probability <= 1.0
+    assert 0.0 <= explained.calibrated_probability <= 1.0
+    assert 0.0 <= explained.posthoc_adjusted_probability <= 1.0
+    assert explained.toxic_probability == explained.posthoc_adjusted_probability
+    ranked_features = (
+        explained.explanation.top_positive_features + explained.explanation.top_negative_features
+    )
+    assert ranked_features
+    assert any(
+        item.feature_group in {"word_ngram", "char_ngram", "expert_feature"}
+        for item in ranked_features
+    )
+    assert any(
+        item.feature_name == "strong_insult_count"
+        for item in explained.explanation.triggered_expert_features
+    )
+
+
+def test_baseline_model_roundtrip_preserves_explained_predictions(
+    workspace_tmp_dir: Path,
+) -> None:
+    dataset_path = workspace_tmp_dir / "mixed.sqlite3"
+    build_training_db(dataset_path)
+    bundle = create_dataset_bundle(dataset_path=dataset_path, random_seed=29)
+
+    model, _ = train_baseline_model(
+        bundle,
+        config=BaselineTrainingConfig(
+            random_seed=29,
+            min_df=1,
+            max_word_features=500,
+            max_char_features=500,
+            select_k_best=200,
+            threshold_grid_size=41,
+        ),
+    )
+    model_path = workspace_tmp_dir / "baseline.pkl"
+    model.save(model_path)
+    restored = ToxicityBaselineModel.load(model_path)
+
+    original = model.predict_one_explained("ты не тупой")
+    reloaded = restored.predict_one_explained("ты не тупой")
+
+    assert original.to_dict() == reloaded.to_dict()
+
+
+def test_train_baseline_model_reports_hard_case_metrics(workspace_tmp_dir: Path) -> None:
+    dataset_path = workspace_tmp_dir / "mixed.sqlite3"
+    build_training_db(dataset_path)
+    hard_case_path = workspace_tmp_dir / "hard_cases.jsonl"
     hard_case_path.write_text(
         "\n".join(
             [
@@ -147,10 +224,10 @@ def test_train_baseline_model_reports_hard_case_metrics(tmp_path: Path) -> None:
     assert "targeted_insult" in report["hard_cases"]["per_tag"]
 
 
-def test_train_baseline_model_reports_seed_dataset_summary(tmp_path: Path) -> None:
-    dataset_path = tmp_path / "mixed.sqlite3"
+def test_train_baseline_model_reports_seed_dataset_summary(workspace_tmp_dir: Path) -> None:
+    dataset_path = workspace_tmp_dir / "mixed.sqlite3"
     build_training_db(dataset_path)
-    seed_path = tmp_path / "seed.jsonl"
+    seed_path = workspace_tmp_dir / "seed.jsonl"
     seed_path.write_text(
         "\n".join(
             [

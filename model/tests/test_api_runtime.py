@@ -1,11 +1,19 @@
-
 from pathlib import Path
+from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from toxic_analyzer.api.app import create_app
 from toxic_analyzer.api.runtime_state import ModelRuntimeState
-from toxic_analyzer.baseline_model import ToxicityPrediction
+from toxic_analyzer.baseline_model import (
+    AppliedAdjustment,
+    ExplainedToxicityPrediction,
+    FeatureContribution,
+    ToxicityExplanation,
+    ToxicityPrediction,
+    TriggeredExpertFeature,
+)
 from toxic_analyzer.inference_service import ModelIdentity, ModelInfo
 
 
@@ -24,6 +32,52 @@ class StubInferenceService:
 
     def predict_many(self, texts: list[str]) -> list[ToxicityPrediction]:
         return [self.predict_one(text) for text in texts]
+
+    def predict_one_explained(self, text: str, *, top_n: int = 10) -> ExplainedToxicityPrediction:
+        is_toxic = "toxic" in text.lower() or "idiot" in text.lower()
+        return ExplainedToxicityPrediction(
+            label=int(is_toxic),
+            toxic_probability=0.91 if is_toxic else 0.14,
+            raw_model_probability=0.86 if is_toxic else 0.11,
+            calibrated_probability=0.92 if is_toxic else 0.13,
+            posthoc_adjusted_probability=0.91 if is_toxic else 0.14,
+            threshold=0.42,
+            explanation=ToxicityExplanation(
+                canonical_tokens=text.lower().split(),
+                top_positive_features=[
+                    FeatureContribution(
+                        feature_group="word_ngram",
+                        feature_name="idiot",
+                        feature_value=1.0,
+                        feature_weight=2.5,
+                        contribution=2.5,
+                    )
+                ][:top_n],
+                top_negative_features=[
+                    FeatureContribution(
+                        feature_group="expert_feature",
+                        feature_name="has_second_person_negated_insult",
+                        feature_value=1.0,
+                        feature_weight=-0.4,
+                        contribution=-0.4,
+                    )
+                ][:top_n],
+                triggered_expert_features=[
+                    TriggeredExpertFeature(
+                        feature_name="strong_insult_count",
+                        feature_value=1.0,
+                        reasons=["token:idiot"],
+                    )
+                ],
+                applied_adjustments=[
+                    AppliedAdjustment(
+                        adjustment_name="second_person_negated_insult",
+                        delta=-0.01,
+                        trigger_features=["strong_insult_count"],
+                    )
+                ],
+            ),
+        )
 
     def get_model_identity(self) -> ModelIdentity:
         return self._identity
@@ -55,8 +109,15 @@ def _build_runtime_state(
     )
 
 
-def test_runtime_reports_not_ready_when_model_missing(tmp_path: Path) -> None:
-    missing_path = tmp_path / "missing-model.pkl"
+@pytest.fixture
+def workspace_tmp_dir() -> Path:
+    root = Path("test-temp") / f"api-runtime-{uuid4().hex}"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def test_runtime_reports_not_ready_when_model_missing(workspace_tmp_dir: Path) -> None:
+    missing_path = workspace_tmp_dir / "missing-model.pkl"
     runtime_state = _build_runtime_state(default_model_path=missing_path, service_map={})
     app = create_app(runtime_state=runtime_state)
 
@@ -73,9 +134,9 @@ def test_runtime_reports_not_ready_when_model_missing(tmp_path: Path) -> None:
 
 
 def test_runtime_predict_endpoints_expose_model_identity_and_preserve_batch_order(
-    tmp_path: Path,
+    workspace_tmp_dir: Path,
 ) -> None:
-    model_path = tmp_path / "baseline-a.pkl"
+    model_path = workspace_tmp_dir / "baseline-a.pkl"
     runtime_state = _build_runtime_state(
         default_model_path=model_path,
         service_map={
@@ -103,6 +164,10 @@ def test_runtime_predict_endpoints_expose_model_identity_and_preserve_batch_orde
                     {"id": "b", "text": "toxic phrase here"},
                 ]
             },
+        )
+        explain_response = client.post(
+            "/v1/predict/explain",
+            json={"id": "exp-1", "text": "You are an idiot", "top_n": 1},
         )
 
     assert ready_response.status_code == 200
@@ -133,3 +198,13 @@ def test_runtime_predict_endpoints_expose_model_identity_and_preserve_batch_orde
     assert batch_payload["model_version"] == "v3.3"
     assert [item["id"] for item in batch_payload["items"]] == ["a", "b"]
     assert [item["label"] for item in batch_payload["items"]] == [0, 1]
+
+    explain_payload = explain_response.json()
+    assert explain_response.status_code == 200
+    assert explain_payload["id"] == "exp-1"
+    assert explain_payload["raw_model_probability"] == 0.86
+    assert explain_payload["calibrated_probability"] == 0.92
+    assert explain_payload["threshold"] == 0.42
+    assert explain_payload["model_key"] == "baseline-a"
+    assert explain_payload["explanation"]["top_positive_features"][0]["feature_group"] == "word_ngram"
+    assert explain_payload["explanation"]["applied_adjustments"][0]["adjustment_name"] == "second_person_negated_insult"

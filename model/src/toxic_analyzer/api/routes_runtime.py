@@ -9,6 +9,8 @@ from toxic_analyzer.api.schemas import (
     BatchPredictionItemResponse,
     BatchPredictionRequest,
     BatchPredictionResponse,
+    ExplainPredictRequest,
+    ExplainPredictionResponse,
     LiveHealthResponse,
     ModelInfoResponse,
     PredictionResponse,
@@ -28,6 +30,8 @@ def _not_ready_response(detail: str) -> JSONResponse:
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content=ReadyHealthResponse(status="not_ready", detail=detail).model_dump(mode="json"),
     )
+
+
 @router.get("/health/live", response_model=LiveHealthResponse)
 async def health_live() -> LiveHealthResponse:
     return LiveHealthResponse()
@@ -79,6 +83,28 @@ async def predict(request: Request, payload: PredictRequest):
         toxic_probability=prediction.toxic_probability,
         model_key=identity.model_key,
         model_version=identity.model_version,
+    )
+
+
+@router.post("/v1/predict/explain", response_model=ExplainPredictionResponse)
+async def predict_explained(request: Request, payload: ExplainPredictRequest):
+    try:
+        service = _get_runtime_state(request).get_service()
+    except ModelNotReadyError as exc:
+        return _not_ready_response(str(exc))
+    prediction = service.predict_one_explained(payload.text, top_n=payload.top_n)
+    identity = service.get_model_identity()
+    return ExplainPredictionResponse(
+        id=payload.id,
+        label=prediction.label,
+        toxic_probability=prediction.toxic_probability,
+        raw_model_probability=prediction.raw_model_probability,
+        calibrated_probability=prediction.calibrated_probability,
+        posthoc_adjusted_probability=prediction.posthoc_adjusted_probability,
+        threshold=prediction.threshold,
+        model_key=identity.model_key,
+        model_version=identity.model_version,
+        explanation=prediction.explanation.to_dict(),
     )
 
 
