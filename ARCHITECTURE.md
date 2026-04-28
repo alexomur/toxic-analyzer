@@ -1,12 +1,12 @@
 # Planned Architecture
 
-This document describes the target architecture of the project. It is a boundary document, not an implementation checklist for the current `model-first` stage.
+This document describes the target architecture of the project. It is a boundary document, not a full delivery checklist for every service at once.
 
 ## Current reality
 
-- Active development is limited to `model/`.
-- `backend/` and `frontend/` are placeholders for future work.
-- The current goal is a reproducible baseline model with a narrow internal runtime.
+- The baseline model in `model/` is treated as ready for integration.
+- Active implementation has moved to `backend/`.
+- `frontend/` is still deferred until backend contracts stabilize.
 
 ## Planned services
 
@@ -30,7 +30,7 @@ Out of scope:
 
 ### `backend`
 
-Future product backend.
+Current product backend.
 
 Responsibilities:
 
@@ -38,6 +38,10 @@ Responsibilities:
 - orchestration, authorization, and product logic
 - storing feedback and product data
 - calling the internal `model` service
+
+Current implementation note:
+
+- the repository currently contains a bootstrap ASP.NET Core API in `backend/ToxicAnalyzer.Api`
 
 ### `frontend`
 
@@ -84,6 +88,6 @@ The explain operation should additionally expose:
 
 ## Near-term direction
 
-- Keep the model runtime thin.
-- Reuse the same Python service layer from both CLI and HTTP.
-- Prepare `model/` for PostgreSQL-backed training without pulling product concerns into it.
+- Build backend capabilities around the existing model contract instead of expanding product logic inside `model`.
+- Keep the model runtime thin and reusable from both CLI and HTTP.
+- Stabilize the backend-to-model integration before starting frontend implementation.
