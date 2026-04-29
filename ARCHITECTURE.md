@@ -1,12 +1,12 @@
-# Planned Architecture
+# Architecture
 
-This document describes the target architecture of the project. It is a boundary document, not a full delivery checklist for every service at once.
+This document describes the current service boundaries after backend MVP completion. It remains a boundary document, not a full delivery checklist.
 
 ## Current reality
 
 - The baseline model in `model/` is treated as ready for integration.
-- Active implementation has moved to `backend/`.
-- `frontend/` is still deferred until backend contracts stabilize.
+- Backend MVP in `backend/` is complete and now defines the public API boundary.
+- `frontend/` remains the next stage and should integrate against backend contracts.
 
 ## Planned services
 
@@ -30,7 +30,7 @@ Out of scope:
 
 ### `backend`
 
-Current product backend.
+Current product backend and public API boundary.
 
 Responsibilities:
 
@@ -41,7 +41,9 @@ Responsibilities:
 
 Current implementation note:
 
-- the repository currently contains a bootstrap ASP.NET Core API in `backend/ToxicAnalyzer.Api`
+- the repository contains a layered ASP.NET Core backend in `backend/src/`
+- MVP endpoints are implemented in `backend/src/ToxicAnalyzer.Api`
+- backend currently performs stateless request processing and delegates inference to `model`
 
 ### `frontend`
 
@@ -85,9 +87,10 @@ The explain operation should additionally expose:
 - Model weights stay in local artifacts under `model/`.
 - PostgreSQL is the shared store for training texts, curated candidates, feedback-derived data, model registry metadata, and retrain jobs.
 - PostgreSQL is not the storage for binary model weights.
+- Backend currently does not persist product data yet; PostgreSQL usage in the repository is currently model-centric.
 
 ## Near-term direction
 
-- Build backend capabilities around the existing model contract instead of expanding product logic inside `model`.
+- Build the next backend capabilities around the existing model contract instead of expanding product logic inside `model`.
 - Keep the model runtime thin and reusable from both CLI and HTTP.
-- Stabilize the backend-to-model integration before starting frontend implementation.
+- Use the completed backend MVP contracts as the integration baseline for frontend work.

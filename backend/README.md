@@ -1,43 +1,119 @@
 # Backend
 
-`backend/` содержит продуктовый backend для Toxic Analyzer.
+`backend/` contains the public ASP.NET Core API for Toxic Analyzer. The backend MVP is complete: the service exposes stable toxicity-analysis endpoints, validates requests, calls the internal `model` service, and returns normalized API responses.
 
-## Текущий статус
+## Current Status
 
-- Технологический стек: ASP.NET Core Web API на `net10.0`
-- Solution: `ToxicAnalyzer.sln`
-- Основной проект: `ToxicAnalyzer.Api`
-- Сейчас в проекте находится стартовый каркас API без доменной логики
-- MVP API-обязательства backend: `backend/API_CONTRACTS.md`
+- Stack: ASP.NET Core Web API on `net10.0`
+- Solution: `backend/ToxicAnalyzer.sln`
+- Main entry point: `backend/src/ToxicAnalyzer.Api/Program.cs`
+- Public API contract: `backend/API_CONTRACTS.md`
+- Internal dependency: Python `model` service over HTTP
+- Current runtime model: stateless request processing without backend persistence
 
-## Зона ответственности
+## Solution Layout
 
-- внешний HTTP API для будущего `frontend`
-- оркестрация вызовов внутреннего `model`-сервиса
-- авторизация, продуктовая логика и хранение продуктовых данных
-- изоляция `frontend` от внутреннего устройства `model`
+- `src/ToxicAnalyzer.Api` - HTTP endpoints, OpenAPI, error handling
+- `src/ToxicAnalyzer.Application` - application handlers and request validation
+- `src/ToxicAnalyzer.Domain` - domain primitives for text and analysis results
+- `src/ToxicAnalyzer.Infrastructure` - HTTP client and health checks for the `model` service
+- `tests/ToxicAnalyzer.UnitTests` - unit tests for application and infrastructure behavior
+- `tests/ToxicAnalyzer.IntegrationTests` - endpoint-level contract tests
 
-`backend` не должен дублировать обучение модели или хранение весов модели.
+## Implemented Public API
 
-## Как запускать локально
+The MVP backend exposes two public endpoints:
 
-Из каталога `backend/`:
+- `POST /api/v1/toxicity/analyze`
+- `POST /api/v1/toxicity/analyze-batch`
+
+Supporting endpoints:
+
+- `GET /health/live`
+- `GET /health/ready`
+
+In development, the service also exposes:
+
+- OpenAPI JSON at `/openapi/v1.json`
+- Swagger UI at `/swagger`
+
+## Current Behavior
+
+Single-text analysis:
+
+- requires `text`
+- accepts optional `reportLevel` with values `summary` or `full`
+- defaults `reportLevel` to `summary`
+- calls `model` endpoint `v1/predict` for `summary`
+- calls `model` endpoint `v1/predict/explain` for `full`
+
+Batch analysis:
+
+- requires non-empty `items`
+- preserves input order in the response
+- echoes `clientItemId` unchanged
+- enforces maximum batch size `100`
+- calls `model` endpoint `v1/predict/batch`
+
+Current non-goals in the backend implementation:
+
+- no backend-side persistence yet
+- no public auth layer yet
+- no public admin or retraining endpoints
+
+## Error Handling
+
+The API uses ASP.NET Core `ProblemDetails`.
+
+Current status mapping:
+
+- `400` for request validation errors
+- `503` when the `model` service is unavailable or returns an invalid upstream response
+- `504` when the `model` service times out
+- `500` for unexpected backend failures
+
+Validation responses include `errors` with `{ field, message }` items.
+
+## Configuration
+
+Primary settings live in `backend/src/ToxicAnalyzer.Api/appsettings.json`.
+
+- `ModelService:BaseUrl` defaults to `http://localhost:8000/`
+- `ModelService:Timeout` defaults to `00:00:10`
+
+For local `dotnet run`, launch profiles are defined in `backend/src/ToxicAnalyzer.Api/Properties/launchSettings.json`.
+
+Default development URLs:
+
+- `http://localhost:5068`
+- `https://localhost:7288`
+
+## Local Run
+
+From `backend/`:
 
 ```powershell
 dotnet restore .\ToxicAnalyzer.sln
-dotnet run --project .\ToxicAnalyzer.Api\ToxicAnalyzer.Api.csproj
+dotnet run --project .\src\ToxicAnalyzer.Api\ToxicAnalyzer.Api.csproj
 ```
 
-По умолчанию Swagger доступен в development-окружении.
+This assumes the internal `model` service is reachable at `http://localhost:8000/`, unless `ModelService__BaseUrl` is overridden.
 
-## Ближайший вектор работ
+## Docker
 
-- заменить шаблонные endpoint'ы на доменные API-контракты
-- подключить конфигурацию для вызовов `model`
-- ввести явные application и infrastructure слои по мере появления реальных сценариев
+The repository-level `docker compose` starts the intended local stack:
 
-## MVP API notes
+- `postgres`
+- `postgres-init`
+- `model`
+- `backend`
 
-- Текущий backend MVP работает без пользовательской auth.
-- Для production-доступа со стороны Discord bot и других внешних клиентов стоит добавить простой API key слой на уровне `backend`.
-- OpenAPI-описание для локальной разработки доступно в development environment по пути `/openapi/v1.json`.
+The backend container listens on port `8080` and points to `http://model:8000/`.
+
+## Verification
+
+From `backend/`:
+
+```powershell
+dotnet test .\ToxicAnalyzer.sln
+```
