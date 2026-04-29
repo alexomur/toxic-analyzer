@@ -1,0 +1,21 @@
+{
+  "backendBaseUrl": "http://localhost:5068",
+  "backendTimeoutMs": 10000,
+  "scanChannelIds": ["123456789012345678"],
+  "alertChannelId": "987654321098765432",
+  "analyzeConcurrency": 4,
+  "alertTemplate": {
+    "content": "Toxic alert in {channelMention} from {authorMention}",
+    "embeds": [
+      {
+        "title": "Toxicity Alert",
+        "description": "Message: {messageText}\nMessage URL: {messageUrl}\nLabel: {label}\nProbability: {toxicProbability}\nFeatures:\n{features}",
+        "color": 15158332,
+        "author": {
+          "name": "{authorTag}"
+        }
+      }
+    ],
+    "attachments": []
+  }
+}
