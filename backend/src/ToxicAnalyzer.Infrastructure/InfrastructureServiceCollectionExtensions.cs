@@ -28,12 +28,22 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddHttpClient<IModelPredictionClient, ModelServiceClient>((serviceProvider, httpClient) =>
         {
-            var options = serviceProvider.GetRequiredService<IOptions<ModelServiceOptions>>().Value;
-            httpClient.BaseAddress = new Uri(EnsureTrailingSlash(options.BaseUrl), UriKind.Absolute);
-            httpClient.Timeout = options.Timeout;
+            ConfigureHttpClient(serviceProvider, httpClient);
+        });
+
+        services.AddHttpClient<ModelServiceHealthCheck>((serviceProvider, httpClient) =>
+        {
+            ConfigureHttpClient(serviceProvider, httpClient);
         });
 
         return services;
+    }
+
+    private static void ConfigureHttpClient(IServiceProvider serviceProvider, HttpClient httpClient)
+    {
+        var options = serviceProvider.GetRequiredService<IOptions<ModelServiceOptions>>().Value;
+        httpClient.BaseAddress = new Uri(EnsureTrailingSlash(options.BaseUrl), UriKind.Absolute);
+        httpClient.Timeout = options.Timeout;
     }
 
     private static string EnsureTrailingSlash(string value)

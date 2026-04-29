@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: toxic-analyzer-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-toxic_analyzer}
+      POSTGRES_USER: ${POSTGRES_USER:-toxic_model}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-toxic_model_pw}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-toxic_model} -d ${POSTGRES_DB:-toxic_analyzer}",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - toxic-analyzer-postgres-data:/var/lib/postgresql/data
+
+  postgres-init:
+    image: toxic-analyzer-model:local
+    build:
+      context: ./model
+    environment:
+      TOXIC_ANALYZER_POSTGRES_DSN: postgresql://${POSTGRES_USER:-toxic_model}:${POSTGRES_PASSWORD:-toxic_model_pw}@postgres:5432/${POSTGRES_DB:-toxic_analyzer}
+    command: ["apply-training-store-schema"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  model:
+    image: toxic-analyzer-model:local
+    build:
+      context: ./model
+    container_name: toxic-analyzer-model
+    environment:
+      TOXIC_ANALYZER_POSTGRES_DSN: postgresql://${POSTGRES_USER:-toxic_model}:${POSTGRES_PASSWORD:-toxic_model_pw}@postgres:5432/${POSTGRES_DB:-toxic_analyzer}
+    volumes:
+      - ./model/artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
+
+  backend:
+    image: toxic-analyzer-backend:local
+    build:
+      context: ./backend
+    container_name: toxic-analyzer-backend
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ModelService__BaseUrl: http://model:8000/
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      model:
+        condition: service_healthy
+
+volumes:
+  toxic-analyzer-postgres-data:

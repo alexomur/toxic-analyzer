@@ -3,6 +3,7 @@ using ToxicAnalyzer.Api.Common.DependencyInjection;
 using ToxicAnalyzer.Api.Common.ErrorHandling;
 using ToxicAnalyzer.Api.Endpoints;
 using ToxicAnalyzer.Infrastructure;
+using ToxicAnalyzer.Infrastructure.ModelService;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,8 +16,7 @@ builder.Services.AddModelServiceInfrastructure(builder.Configuration);
 builder.Services
     .AddHealthChecks()
     .AddCheck("live", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: ["live"])
-    // TODO: add model service readiness probe when Infrastructure.ModelService exposes a dedicated health client.
-    .AddCheck("ready", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: ["ready"]);
+    .AddCheck<ModelServiceHealthCheck>("ready", tags: ["ready"]);
 
 var app = builder.Build();
 
@@ -25,6 +25,11 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/openapi/v1.json", "Toxic Analyzer API v1");
+        options.RoutePrefix = "swagger";
+    });
 }
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions

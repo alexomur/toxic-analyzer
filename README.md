@@ -19,87 +19,58 @@ Toxic Analyzer is a monorepo for a toxicity-classification project. The baseline
 
 ## Quick start
 
-The repository now has two practical entry points: `backend/` for product API development and `model/` for the internal ML runtime.
+The local stack is now intended to run through `docker compose` from the repository root.
 
-### Backend
+### Full application stack
+
+Before the first start, make sure the local baseline artifact exists under `model/artifacts/`, typically `model/artifacts/baseline_model_v3_3.pkl`.
+
+```powershell
+docker compose up --build
+```
+
+What starts:
+
+- `postgres` as the internal training/admin store
+- `postgres-init` as a one-shot schema initializer
+- `model` as the internal FastAPI runtime
+- `backend` as the public ASP.NET Core API
+
+Primary local endpoint:
+
+- backend: `http://127.0.0.1:8080`
+- OpenAPI in local compose: `http://127.0.0.1:8080/openapi/v1.json`
+- Swagger UI in local compose: `http://127.0.0.1:8080/swagger`
+- backend health: `http://127.0.0.1:8080/health/live`
+
+To stop the stack:
+
+```powershell
+docker compose down
+```
+
+To remove PostgreSQL data as well:
+
+```powershell
+docker compose down -v
+```
+
+### Backend without containers
 
 ```powershell
 Set-Location .\backend
 dotnet restore .\ToxicAnalyzer.sln
-dotnet run --project .\ToxicAnalyzer.Api\ToxicAnalyzer.Api.csproj
+dotnet run --project .\src\ToxicAnalyzer.Api\ToxicAnalyzer.Api.csproj
 ```
 
-The current backend project is an ASP.NET Core API skeleton with Swagger enabled in development.
+For non-container local backend development, the default model base URL remains `http://localhost:8000/`. Swagger UI is enabled when `ASPNETCORE_ENVIRONMENT=Development`.
 
-### Model runtime
-
-The commands below assume Docker is installed and you want to run PostgreSQL and the internal model runtime locally.
-
-#### 1. Install model dependencies
+### Model runtime without compose
 
 ```powershell
 Set-Location .\model
 python -m pip install -e .[dev]
-```
-
-#### 2. Start PostgreSQL for the model pipeline
-
-```powershell
-docker volume create toxic-analyzer-postgres-e2e-data
-docker run -d `
-  --name toxic-analyzer-postgres-e2e `
-  -e POSTGRES_DB=toxic_analyzer_e2e `
-  -e POSTGRES_USER=toxic_model `
-  -e POSTGRES_PASSWORD=toxic_model_pw `
-  -p 127.0.0.1:55432:5432 `
-  --health-cmd "pg_isready -U toxic_model -d toxic_analyzer_e2e" `
-  --health-interval 5s `
-  --health-timeout 3s `
-  --health-retries 20 `
-  -v toxic-analyzer-postgres-e2e-data:/var/lib/postgresql/data `
-  postgres:17
-```
-
-#### 3. Initialize the training store
-
-```powershell
-apply-training-store-schema --postgres-dsn "postgresql://toxic_model:toxic_model_pw@127.0.0.1:55432/toxic_analyzer_e2e"
-import-mixed-dataset-to-postgres --postgres-dsn "postgresql://toxic_model:toxic_model_pw@127.0.0.1:55432/toxic_analyzer_e2e"
-$env:TOXIC_ANALYZER_POSTGRES_DSN="postgresql://toxic_model:toxic_model_pw@127.0.0.1:55432/toxic_analyzer_e2e"
-```
-
-#### 4. Train the baseline model artifact
-
-```powershell
-train-baseline --data-source postgres
-```
-
-This produces the local artifact used by the runtime, typically `model/artifacts/baseline_model_v3_3.pkl`.
-
-#### 5. Build the model container
-
-Run this from the repository root:
-
-```powershell
-Set-Location ..
-docker build -t toxic-analyzer-model:local .\model
-```
-
-#### 6. Start the model container
-
-```powershell
-docker run --rm -p 8000:8000 `
-  --name toxic-analyzer-model `
-  -e TOXIC_ANALYZER_POSTGRES_DSN="postgresql://toxic_model:toxic_model_pw@host.docker.internal:55432/toxic_analyzer_e2e" `
-  toxic-analyzer-model:local
-```
-
-#### 7. Verify the runtime
-
-```powershell
-Invoke-WebRequest http://127.0.0.1:8000/health/live
-Invoke-WebRequest http://127.0.0.1:8000/health/ready
-Invoke-WebRequest http://127.0.0.1:8000/v1/model/info
+serve-model-api --host 127.0.0.1 --port 8000
 ```
 
 ## Current rules
