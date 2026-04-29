@@ -13,6 +13,8 @@ internal static class ToxicityContractMappings
             result.Label,
             result.ToxicProbability,
             ToModelResponse(result.Model),
+            ToReportLevelResponse(result.ReportLevel),
+            ToExplanationResponse(result.Explanation),
             result.CreatedAt);
     }
 
@@ -47,5 +49,31 @@ internal static class ToxicityContractMappings
     private static ModelInfoResponse ToModelResponse(ModelDescriptor model)
     {
         return new ModelInfoResponse(model.ModelKey, model.ModelVersion);
+    }
+
+    private static string ToReportLevelResponse(AnalyzeTextReportLevel reportLevel)
+    {
+        return reportLevel switch
+        {
+            AnalyzeTextReportLevel.Summary => "summary",
+            AnalyzeTextReportLevel.Full => "full",
+            _ => throw new ArgumentOutOfRangeException(nameof(reportLevel), reportLevel, "Unsupported report level.")
+        };
+    }
+
+    private static AnalyzeTextExplanationResponse? ToExplanationResponse(AnalyzeTextExplanation? explanation)
+    {
+        if (explanation is null)
+        {
+            return null;
+        }
+
+        return new AnalyzeTextExplanationResponse(
+            explanation.CalibratedProbability,
+            explanation.AdjustedProbability,
+            explanation.Threshold,
+            explanation.Features
+                .Select(feature => new AnalyzeTextExplanationFeatureResponse(feature.Name, feature.Contribution))
+                .ToArray());
     }
 }

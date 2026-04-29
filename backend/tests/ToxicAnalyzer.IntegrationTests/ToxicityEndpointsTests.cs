@@ -15,13 +15,14 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     public ToxicityEndpointsTests(ApiWebApplicationFactory factory)
     {
         _factory = factory;
+        _factory.ModelPredictionClient.Reset();
         _client = factory.CreateClient();
     }
 
     [Fact]
-    public async Task Analyze_ReturnsSuccessfulResponse()
+    public async Task Analyze_WithoutReportLevel_ReturnsSummaryResponse()
     {
-        _factory.ModelPredictionClient.ExceptionToThrow = null;
+        _factory.ModelPredictionClient.Reset();
         _factory.ModelPredictionClient.SinglePrediction = FakeModelPredictionClient.CreatePrediction(1, 0.91m);
 
         var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze", new
@@ -39,12 +40,70 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         Assert.Equal(0.91m, payload.ToxicProbability);
         Assert.Equal("baseline", payload.Model.ModelKey);
         Assert.Equal("v3.3", payload.Model.ModelVersion);
+        Assert.Equal("summary", payload.ReportLevel);
+        Assert.Null(payload.Explanation);
         Assert.Equal(new DateTimeOffset(2026, 4, 29, 12, 0, 0, TimeSpan.Zero), payload.CreatedAt);
+        Assert.Equal(1, _factory.ModelPredictionClient.PredictAsyncCallCount);
+        Assert.Equal(0, _factory.ModelPredictionClient.PredictWithExplanationAsyncCallCount);
+    }
+
+    [Fact]
+    public async Task Analyze_WithSummaryReportLevel_ReturnsSummaryResponse()
+    {
+        _factory.ModelPredictionClient.Reset();
+        _factory.ModelPredictionClient.SinglePrediction = FakeModelPredictionClient.CreatePrediction(1, 0.91m);
+
+        var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze", new
+        {
+            text = "some text",
+            reportLevel = "summary"
+        });
+
+        response.EnsureSuccessStatusCode();
+
+        var payload = await response.Content.ReadFromJsonAsync<AnalyzeTextResponseContract>(JsonOptions);
+
+        Assert.NotNull(payload);
+        Assert.Equal("summary", payload.ReportLevel);
+        Assert.Null(payload.Explanation);
+        Assert.Equal(1, _factory.ModelPredictionClient.PredictAsyncCallCount);
+        Assert.Equal(0, _factory.ModelPredictionClient.PredictWithExplanationAsyncCallCount);
+    }
+
+    [Fact]
+    public async Task Analyze_WithFullReportLevel_ReturnsFullResponse()
+    {
+        _factory.ModelPredictionClient.Reset();
+        _factory.ModelPredictionClient.ExplainedPrediction = FakeModelPredictionClient.CreateExplainedPrediction(1, 0.91m);
+
+        var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze", new
+        {
+            text = "some text",
+            reportLevel = "full"
+        });
+
+        response.EnsureSuccessStatusCode();
+
+        var payload = await response.Content.ReadFromJsonAsync<AnalyzeTextResponseContract>(JsonOptions);
+
+        Assert.NotNull(payload);
+        Assert.Equal("full", payload.ReportLevel);
+        Assert.NotNull(payload.Explanation);
+        Assert.Equal(0.89m, payload.Explanation.CalibratedProbability);
+        Assert.Equal(0.91m, payload.Explanation.AdjustedProbability);
+        Assert.Equal(0.80m, payload.Explanation.Threshold);
+        Assert.Single(payload.Explanation.Features);
+        Assert.Equal("some feature", payload.Explanation.Features[0].Name);
+        Assert.Equal(0.42m, payload.Explanation.Features[0].Contribution);
+        Assert.Equal(0, _factory.ModelPredictionClient.PredictAsyncCallCount);
+        Assert.Equal(1, _factory.ModelPredictionClient.PredictWithExplanationAsyncCallCount);
     }
 
     [Fact]
     public async Task Analyze_Returns400_ForWhitespaceText()
     {
+        _factory.ModelPredictionClient.Reset();
+
         var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze", new
         {
             text = "   "
@@ -62,7 +121,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     [Fact]
     public async Task AnalyzeBatch_ReturnsSuccessfulResponse()
     {
-        _factory.ModelPredictionClient.ExceptionToThrow = null;
+        _factory.ModelPredictionClient.Reset();
         _factory.ModelPredictionClient.BatchPredictions =
         [
             FakeModelPredictionClient.CreatePrediction(0, 0.12m),
@@ -95,7 +154,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     [Fact]
     public async Task AnalyzeBatch_PreservesRequestOrder()
     {
-        _factory.ModelPredictionClient.ExceptionToThrow = null;
+        _factory.ModelPredictionClient.Reset();
         _factory.ModelPredictionClient.BatchPredictions =
         [
             FakeModelPredictionClient.CreatePrediction(1, 0.90m),
@@ -126,7 +185,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     [Fact]
     public async Task AnalyzeBatch_ReturnsClientItemIdWithoutChanges()
     {
-        _factory.ModelPredictionClient.ExceptionToThrow = null;
+        _factory.ModelPredictionClient.Reset();
         _factory.ModelPredictionClient.BatchPredictions =
         [
             FakeModelPredictionClient.CreatePrediction(0, 0.22m),
@@ -170,6 +229,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     [Fact]
     public async Task Analyze_Returns503_WhenModelServiceFails()
     {
+        _factory.ModelPredictionClient.Reset();
         _factory.ModelPredictionClient.ExceptionToThrow = new ModelServiceException("model down")
         {
             FailureKind = ModelServiceFailureKind.Unavailable
@@ -192,7 +252,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     [Fact]
     public async Task Analyze_ResponseShapeMatchesPublicContract()
     {
-        _factory.ModelPredictionClient.ExceptionToThrow = null;
+        _factory.ModelPredictionClient.Reset();
         _factory.ModelPredictionClient.SinglePrediction = FakeModelPredictionClient.CreatePrediction(1, 0.91m);
 
         var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze", new
@@ -209,9 +269,30 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         Assert.True(root.TryGetProperty("label", out _));
         Assert.True(root.TryGetProperty("toxicProbability", out _));
         Assert.True(root.TryGetProperty("model", out var model));
+        Assert.True(root.TryGetProperty("reportLevel", out _));
+        Assert.True(root.TryGetProperty("explanation", out _));
         Assert.True(root.TryGetProperty("createdAt", out _));
         Assert.True(model.TryGetProperty("modelKey", out _));
         Assert.True(model.TryGetProperty("modelVersion", out _));
+    }
+
+    [Fact]
+    public async Task Analyze_Returns400_ForInvalidReportLevel()
+    {
+        _factory.ModelPredictionClient.Reset();
+
+        var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze", new
+        {
+            text = "some text",
+            reportLevel = "verbose"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<ProblemDetailsContract>(JsonOptions);
+
+        Assert.NotNull(payload);
+        Assert.Contains(payload.Errors, error => error.Field == "reportLevel");
     }
 
     private sealed record AnalyzeTextResponseContract(
@@ -219,7 +300,19 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         int Label,
         decimal ToxicProbability,
         ModelInfoContract Model,
+        string ReportLevel,
+        AnalyzeTextExplanationContract? Explanation,
         DateTimeOffset CreatedAt);
+
+    private sealed record AnalyzeTextExplanationContract(
+        decimal CalibratedProbability,
+        decimal AdjustedProbability,
+        decimal Threshold,
+        IReadOnlyList<AnalyzeTextExplanationFeatureContract> Features);
+
+    private sealed record AnalyzeTextExplanationFeatureContract(
+        string Name,
+        decimal Contribution);
 
     private sealed record AnalyzeBatchResponseContract(
         string BatchId,

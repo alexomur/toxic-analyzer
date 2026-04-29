@@ -29,6 +29,23 @@ public sealed class ModelServiceClient : IModelPredictionClient
         return MapPrediction(response.Label, response.ToxicProbability, response.ModelKey, response.ModelVersion);
     }
 
+    public async Task<ExplainedModelPrediction> PredictWithExplanationAsync(
+        TextContent text,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var response = await PostAsJsonAsync<PredictRequestDto, PredictExplainResponseDto>(
+            "v1/predict/explain",
+            new PredictRequestDto(text.Original),
+            cancellationToken);
+
+        var prediction = MapPrediction(response.Label, response.ToxicProbability, response.ModelKey, response.ModelVersion);
+        var explanation = MapExplanation(response);
+
+        return new ExplainedModelPrediction(prediction, explanation);
+    }
+
     public async Task<IReadOnlyList<ModelPrediction>> PredictBatchAsync(
         IReadOnlyList<TextContent> texts,
         CancellationToken cancellationToken)
@@ -139,5 +156,39 @@ public sealed class ModelServiceClient : IModelPredictionClient
         {
             throw new ModelServiceException("Model service returned an invalid prediction payload.", exception);
         }
+    }
+
+    private static ModelPredictionExplanation MapExplanation(PredictExplainResponseDto response)
+    {
+        try
+        {
+            ArgumentNullException.ThrowIfNull(response.Explanation);
+            ArgumentNullException.ThrowIfNull(response.Explanation.TopPositiveFeatures);
+            ArgumentNullException.ThrowIfNull(response.Explanation.TopNegativeFeatures);
+
+            var features = response.Explanation.TopPositiveFeatures
+                .Concat(response.Explanation.TopNegativeFeatures)
+                .Select(item => new ModelPredictionFeature(
+                    item.FeatureName,
+                    ConvertToDecimal(item.Contribution)))
+                .OrderByDescending(item => Math.Abs(item.Contribution))
+                .ThenBy(item => item.Name, StringComparer.Ordinal)
+                .ToArray();
+
+            return new ModelPredictionExplanation(
+                ConvertToDecimal(response.CalibratedProbability),
+                ConvertToDecimal(response.PosthocAdjustedProbability),
+                ConvertToDecimal(response.Threshold),
+                features);
+        }
+        catch (Exception exception) when (exception is ArgumentException or ArgumentNullException or OverflowException)
+        {
+            throw new ModelServiceException("Model service returned an invalid prediction payload.", exception);
+        }
+    }
+
+    private static decimal ConvertToDecimal(double value)
+    {
+        return Convert.ToDecimal(value);
     }
 }

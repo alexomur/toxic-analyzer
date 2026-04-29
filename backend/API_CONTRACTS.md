@@ -35,7 +35,8 @@ Check a single text for toxicity.
 
 ```json
 {
-  "text": "some text"
+  "text": "some text",
+  "reportLevel": "summary"
 }
 ```
 
@@ -50,6 +51,8 @@ Check a single text for toxicity.
     "modelKey": "string",
     "modelVersion": "string"
   },
+  "reportLevel": "summary",
+  "explanation": null,
   "createdAt": "2026-04-29T12:00:00Z"
 }
 ```
@@ -57,8 +60,9 @@ Check a single text for toxicity.
 ### Backend obligations
 
 - Validate `text` before calling the internal `model` service.
+- Validate `reportLevel` when it is supplied and default it to `summary` when it is omitted.
 - Reject invalid requests with the common backend error format.
-- Call the internal `model` service for inference.
+- Call the internal `model` service for either summary or explain inference depending on `reportLevel`.
 - Persist the analysis result in backend storage.
 - Add or update the corresponding text record in the temporary candidate-text store.
 - Return a normalized backend response rather than the raw `model` service payload.
@@ -70,6 +74,7 @@ Check a single text for toxicity.
 - `text` is required.
 - `text` must be a string.
 - `text` must not be empty after normalization/trim.
+- `reportLevel`, if provided, must be either `summary` or `full`.
 - Maximum text length: `TBD`.
 
 ### Contract notes
@@ -77,6 +82,9 @@ Check a single text for toxicity.
 - `label` is the backend-exposed binary toxicity label returned from model inference.
 - `toxicProbability` is the backend-exposed normalized probability in the `[0, 1]` range.
 - `model.modelKey` and `model.modelVersion` identify the model that produced the result.
+- `reportLevel` echoes the resolved report mode used by the backend.
+- `explanation` is always present in the JSON contract and is `null` for `summary`.
+- In `full` mode, `explanation` contains backend-level explainability fields and does not mirror the raw internal `model` schema.
 
 ## Public Endpoint: `POST /api/v1/toxicity/analyze-batch`
 
@@ -276,7 +284,7 @@ The backend must treat the Python `model` service as an internal dependency with
 
 ## Non-Goals for This MVP
 
-- Explainability endpoints
+- Separate public explainability endpoints
 - Public dataset-management endpoints
 - Public retraining endpoints
 - Frontend-specific analytics endpoints beyond the batch response summary

@@ -36,6 +36,49 @@ public sealed class ModelServiceClientTests
     }
 
     [Fact]
+    public async Task PredictWithExplanationAsync_MapsExplainResponse()
+    {
+        var handler = new StubHttpMessageHandler((request, cancellationToken) =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("http://localhost:8000/v1/predict/explain", request.RequestUri?.ToString());
+            return Task.FromResult(CreateJsonResponse("""
+                {
+                  "label": 1,
+                  "toxic_probability": 0.91,
+                  "calibrated_probability": 0.89,
+                  "posthoc_adjusted_probability": 0.91,
+                  "threshold": 0.8,
+                  "model_key": "baseline-a",
+                  "model_version": "v3.3",
+                  "explanation": {
+                    "top_positive_features": [
+                      { "feature_name": "strong_insult_count", "contribution": 0.42 }
+                    ],
+                    "top_negative_features": [
+                      { "feature_name": "has_second_person_negated_insult", "contribution": -0.11 }
+                    ]
+                  }
+                }
+                """));
+        });
+
+        var client = CreateClient(handler);
+
+        var result = await client.PredictWithExplanationAsync(TextContent.Create("ты идиот"), CancellationToken.None);
+
+        Assert.Equal(1, result.Prediction.Label.Value);
+        Assert.Equal(0.91m, result.Prediction.ToxicProbability.Value);
+        Assert.Equal("baseline-a", result.Prediction.Model.ModelKey);
+        Assert.Equal(0.89m, result.Explanation.CalibratedProbability);
+        Assert.Equal(0.91m, result.Explanation.AdjustedProbability);
+        Assert.Equal(0.8m, result.Explanation.Threshold);
+        Assert.Equal(2, result.Explanation.Features.Count);
+        Assert.Equal("strong_insult_count", result.Explanation.Features[0].Name);
+        Assert.Equal(0.42m, result.Explanation.Features[0].Contribution);
+    }
+
+    [Fact]
     public async Task PredictBatchAsync_MapsBatchResponse()
     {
         var handler = new StubHttpMessageHandler((request, cancellationToken) =>
@@ -116,6 +159,22 @@ public sealed class ModelServiceClientTests
             CancellationToken.None));
 
         Assert.Equal("Timed out while calling model service.", exception.Message);
+    }
+
+    [Fact]
+    public async Task PredictWithExplanationAsync_ThrowsForServerErrors()
+    {
+        var handler = new StubHttpMessageHandler((request, cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError)));
+
+        var client = CreateClient(handler);
+
+        var exception = await Assert.ThrowsAsync<ModelServiceException>(() => client.PredictWithExplanationAsync(
+            TextContent.Create("hello"),
+            CancellationToken.None));
+
+        Assert.Equal(HttpStatusCode.InternalServerError, exception.StatusCode);
+        Assert.Equal(ModelServiceFailureKind.Unavailable, exception.FailureKind);
     }
 
     private static IModelPredictionClient CreateClient(HttpMessageHandler handler)

@@ -38,7 +38,9 @@ public static class ToxicityEndpoints
         AnalyzeTextHandler handler,
         CancellationToken cancellationToken)
     {
-        var result = await handler.HandleAsync(new AnalyzeTextCommand(request.Text), cancellationToken);
+        var result = await handler.HandleAsync(
+            new AnalyzeTextCommand(request.Text, request.ReportLevel),
+            cancellationToken);
         return Results.Ok(result.ToResponse());
     }
 

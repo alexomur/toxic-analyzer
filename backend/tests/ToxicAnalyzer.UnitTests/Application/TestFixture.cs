@@ -38,9 +38,15 @@ internal sealed class FakeModelPredictionClient : IModelPredictionClient
 {
     public ModelPrediction SinglePrediction { get; set; } = TestData.Prediction(PredictionLabel.NonToxic, 0.05m);
 
+    public ExplainedModelPrediction ExplainedPrediction { get; set; } = TestData.ExplainedPrediction(PredictionLabel.NonToxic, 0.05m);
+
     public IReadOnlyList<ModelPrediction> BatchPredictions { get; set; } = [];
 
     public Exception? ExceptionToThrow { get; set; }
+
+    public int PredictAsyncCallCount { get; private set; }
+
+    public int PredictWithExplanationAsyncCallCount { get; private set; }
 
     public Task<ModelPrediction> PredictAsync(TextContent text, CancellationToken cancellationToken)
     {
@@ -49,7 +55,21 @@ internal sealed class FakeModelPredictionClient : IModelPredictionClient
             throw ExceptionToThrow;
         }
 
+        PredictAsyncCallCount++;
         return Task.FromResult(SinglePrediction);
+    }
+
+    public Task<ExplainedModelPrediction> PredictWithExplanationAsync(
+        TextContent text,
+        CancellationToken cancellationToken)
+    {
+        if (ExceptionToThrow is not null)
+        {
+            throw ExceptionToThrow;
+        }
+
+        PredictWithExplanationAsyncCallCount++;
+        return Task.FromResult(ExplainedPrediction);
     }
 
     public Task<IReadOnlyList<ModelPrediction>> PredictBatchAsync(
@@ -83,6 +103,17 @@ internal static class TestData
             label,
             new ToxicProbability(probability),
             ModelIdentity.Create("baseline-a", "v1"));
+    }
+
+    public static ExplainedModelPrediction ExplainedPrediction(PredictionLabel label, decimal probability)
+    {
+        return new ExplainedModelPrediction(
+            Prediction(label, probability),
+            new ModelPredictionExplanation(
+                0.89m,
+                probability,
+                0.80m,
+                [new ModelPredictionFeature("strong_insult_count", 0.42m)]));
     }
 
     public static ToxicityAnalysis Analysis(

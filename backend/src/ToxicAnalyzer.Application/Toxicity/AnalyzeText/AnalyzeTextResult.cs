@@ -5,4 +5,6 @@ public sealed record AnalyzeTextResult(
     int Label,
     decimal ToxicProbability,
     ModelDescriptor Model,
+    AnalyzeTextReportLevel ReportLevel,
+    AnalyzeTextExplanation? Explanation,
     DateTimeOffset CreatedAt);
