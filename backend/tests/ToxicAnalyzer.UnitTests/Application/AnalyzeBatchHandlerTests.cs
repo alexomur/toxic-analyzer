@@ -5,7 +5,7 @@ using ToxicAnalyzer.Domain.Analysis;
 
 namespace ToxicAnalyzer.UnitTests.Application;
 
-public sealed class AnalyzeBatchHandlerTests
+public sealed partial class AnalyzeBatchHandlerTests
 {
     [Fact]
     public async Task HandleAsync_ReturnsStatelessBatchAndSummary()

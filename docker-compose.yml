@@ -54,9 +54,14 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ModelService__BaseUrl: http://model:8000/
+      AnalysisCapture__Enabled: "true"
+      AnalysisCapture__ConnectionString: postgresql://${POSTGRES_USER:-toxic_model}:${POSTGRES_PASSWORD:-toxic_model_pw}@postgres:5432/${POSTGRES_DB:-toxic_analyzer}
+      AnalysisCapture__Schema: public
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
+      postgres:
+        condition: service_healthy
       model:
         condition: service_healthy
 

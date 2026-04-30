@@ -213,7 +213,7 @@ For explain responses, the backend additionally maps:
 
 ## Current Implementation Notes
 
-- the backend MVP is stateless
-- no backend persistence is implemented yet
+- the backend captures analyzed texts asynchronously into PostgreSQL when `AnalysisCapture` is enabled
+- capture does not change the public response contract and is intentionally best-effort
 - no auth layer is implemented yet
 - admin and retraining endpoints are intentionally not part of the public backend MVP

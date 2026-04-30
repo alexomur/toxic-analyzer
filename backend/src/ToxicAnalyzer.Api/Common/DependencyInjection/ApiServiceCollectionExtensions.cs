@@ -11,6 +11,7 @@ public static class ApiServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<IClock, SystemClock>();
+        services.AddSingleton<IAnalysisCaptureScheduler, NoOpAnalysisCaptureScheduler>();
         services.AddScoped<AnalyzeTextHandler>();
         services.AddScoped<AnalyzeBatchHandler>();
 

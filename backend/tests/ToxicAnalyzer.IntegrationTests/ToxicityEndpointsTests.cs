@@ -16,6 +16,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     {
         _factory = factory;
         _factory.ModelPredictionClient.Reset();
+        _factory.AnalysisCaptureScheduler.Reset();
         _client = factory.CreateClient();
     }
 
@@ -68,6 +69,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         Assert.Null(payload.Explanation);
         Assert.Equal(1, _factory.ModelPredictionClient.PredictAsyncCallCount);
         Assert.Equal(0, _factory.ModelPredictionClient.PredictWithExplanationAsyncCallCount);
+        Assert.Single(_factory.AnalysisCaptureScheduler.CapturedAnalyses);
     }
 
     [Fact]
@@ -149,6 +151,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         Assert.Equal(1, payload.Summary.NonToxicCount);
         Assert.Equal(0.50m, payload.Summary.AverageToxicProbability);
         Assert.Equal(new DateTimeOffset(2026, 4, 29, 12, 0, 0, TimeSpan.Zero), payload.CreatedAt);
+        Assert.Equal(2, _factory.AnalysisCaptureScheduler.CapturedAnalyses.Count);
     }
 
     [Fact]

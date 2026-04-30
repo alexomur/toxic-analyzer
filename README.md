@@ -1,10 +1,10 @@
 # Toxic Analyzer
 
-Toxic Analyzer is a monorepo for a toxicity-classification project. The baseline model is integrated as an internal service, and the backend MVP is complete in `backend/`.
+Toxic Analyzer is a monorepo for a toxicity-classification project. The baseline model is integrated as an internal service, and the backend in `backend/` now captures deduplicated analyzed texts into PostgreSQL for future feedback and training workflows.
 
 ## Project scope
 
-- `backend/` contains the public product API and already integrates with the internal model service.
+- `backend/` contains the public product API, integrates with the internal model service, and asynchronously stores deduplicated analyzed texts in PostgreSQL.
 - `model/` contains the trained baseline, training pipeline, inference CLI, and internal FastAPI runtime.
 - `frontend/` remains the next stage and should consume the stable backend contracts.
 - Notebooks remain research-only. Final model code must live in regular Python modules.
@@ -31,10 +31,10 @@ docker compose up --build
 
 What starts:
 
-- `postgres` as the model-side training/admin store
+- `postgres` as the shared training/admin/product-data store
 - `postgres-init` as a one-shot schema initializer
 - `model` as the internal FastAPI runtime
-- `backend` as the public ASP.NET Core API
+- `backend` as the public ASP.NET Core API with asynchronous analysis capture enabled
 
 Primary local endpoint:
 

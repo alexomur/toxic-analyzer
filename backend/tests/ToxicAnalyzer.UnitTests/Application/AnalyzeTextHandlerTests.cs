@@ -25,6 +25,8 @@ public sealed class AnalyzeTextHandlerTests
         Assert.Equal(AnalyzeTextReportLevel.Summary, result.ReportLevel);
         Assert.Null(result.Explanation);
         Assert.Equal(fixture.Clock.UtcNow, result.CreatedAt);
+        Assert.Single(fixture.AnalysisCaptureScheduler.CapturedAnalyses);
+        Assert.Equal("You are awful", fixture.AnalysisCaptureScheduler.CapturedAnalyses[0].Text.Original);
     }
 
     [Fact]
@@ -114,5 +116,7 @@ public sealed class AnalyzeTextHandlerTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.AnalyzeTextHandler.HandleAsync(
             new AnalyzeTextCommand("Some text"),
             CancellationToken.None));
+
+        Assert.Empty(fixture.AnalysisCaptureScheduler.CapturedAnalyses);
     }
 }

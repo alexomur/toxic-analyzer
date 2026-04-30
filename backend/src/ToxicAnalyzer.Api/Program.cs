@@ -13,6 +13,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 builder.Services.AddApiServices();
 builder.Services.AddModelServiceInfrastructure(builder.Configuration);
+builder.Services.AddAnalysisCaptureInfrastructure(builder.Configuration);
 builder.Services
     .AddHealthChecks()
     .AddCheck("live", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: ["live"])

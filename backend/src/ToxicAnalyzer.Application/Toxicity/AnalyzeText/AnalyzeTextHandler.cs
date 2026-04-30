@@ -7,13 +7,16 @@ namespace ToxicAnalyzer.Application.Toxicity.AnalyzeText;
 public sealed class AnalyzeTextHandler
 {
     private readonly IModelPredictionClient _modelPredictionClient;
+    private readonly IAnalysisCaptureScheduler _analysisCaptureScheduler;
     private readonly IClock _clock;
 
     public AnalyzeTextHandler(
         IModelPredictionClient modelPredictionClient,
+        IAnalysisCaptureScheduler analysisCaptureScheduler,
         IClock clock)
     {
         _modelPredictionClient = modelPredictionClient;
+        _analysisCaptureScheduler = analysisCaptureScheduler;
         _clock = clock;
     }
 
@@ -27,6 +30,7 @@ public sealed class AnalyzeTextHandler
         var reportLevel = ResolveReportLevel(command.ReportLevel);
         var (prediction, explanation) = await PredictAsync(text, reportLevel, cancellationToken);
         var analysis = ToxicityMappings.ToAnalysis(text, prediction, _clock.UtcNow);
+        _analysisCaptureScheduler.Schedule(analysis);
 
         return new AnalyzeTextResult(
             analysis.Id.ToString(),

@@ -8,13 +8,16 @@ namespace ToxicAnalyzer.Application.Toxicity.AnalyzeBatch;
 public sealed class AnalyzeBatchHandler
 {
     private readonly IModelPredictionClient _modelPredictionClient;
+    private readonly IAnalysisCaptureScheduler _analysisCaptureScheduler;
     private readonly IClock _clock;
 
     public AnalyzeBatchHandler(
         IModelPredictionClient modelPredictionClient,
+        IAnalysisCaptureScheduler analysisCaptureScheduler,
         IClock clock)
     {
         _modelPredictionClient = modelPredictionClient;
+        _analysisCaptureScheduler = analysisCaptureScheduler;
         _clock = clock;
     }
 
@@ -60,6 +63,7 @@ public sealed class AnalyzeBatchHandler
         }
 
         var batch = Domain.Analysis.AnalysisBatch.Create(analysisItems, createdAt);
+        _analysisCaptureScheduler.ScheduleBatch(analysisItems.Select(item => item.Analysis).ToArray());
 
         return new AnalyzeBatchResult(
             batch.Id.ToString(),

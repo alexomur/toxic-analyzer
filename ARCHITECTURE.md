@@ -43,7 +43,7 @@ Current implementation note:
 
 - the repository contains a layered ASP.NET Core backend in `backend/src/`
 - MVP endpoints are implemented in `backend/src/ToxicAnalyzer.Api`
-- backend currently performs stateless request processing and delegates inference to `model`
+- backend delegates inference to `model` and asynchronously captures normalized analyzed texts into PostgreSQL for future product feedback and training workflows
 
 ### `frontend`
 
@@ -87,7 +87,7 @@ The explain operation should additionally expose:
 - Model weights stay in local artifacts under `model/`.
 - PostgreSQL is the shared store for training texts, curated candidates, feedback-derived data, model registry metadata, and retrain jobs.
 - PostgreSQL is not the storage for binary model weights.
-- Backend currently does not persist product data yet; PostgreSQL usage in the repository is currently model-centric.
+- Backend now persists deduplicated analyzed texts as product data in PostgreSQL; model-specific training and registry data remain separate concerns in the same database.
 
 ## Near-term direction
 

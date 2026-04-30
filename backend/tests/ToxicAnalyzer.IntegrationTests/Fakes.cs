@@ -94,3 +94,25 @@ public sealed class FakeClock : IClock
 
     public DateTimeOffset UtcNow { get; }
 }
+
+public sealed class FakeAnalysisCaptureScheduler : IAnalysisCaptureScheduler
+{
+    public List<ToxicityAnalysis> CapturedAnalyses { get; } = [];
+
+    public void Reset()
+    {
+        CapturedAnalyses.Clear();
+    }
+
+    public void Schedule(ToxicityAnalysis analysis)
+    {
+        ArgumentNullException.ThrowIfNull(analysis);
+        CapturedAnalyses.Add(analysis);
+    }
+
+    public void ScheduleBatch(IReadOnlyCollection<ToxicityAnalysis> analyses)
+    {
+        ArgumentNullException.ThrowIfNull(analyses);
+        CapturedAnalyses.AddRange(analyses);
+    }
+}

@@ -10,15 +10,19 @@ internal sealed class TestFixture
 {
     private TestFixture(
         FakeModelPredictionClient modelClient,
+        FakeAnalysisCaptureScheduler analysisCaptureScheduler,
         FakeClock clock)
     {
         ModelClient = modelClient;
+        AnalysisCaptureScheduler = analysisCaptureScheduler;
         Clock = clock;
-        AnalyzeTextHandler = new AnalyzeTextHandler(modelClient, clock);
-        AnalyzeBatchHandler = new AnalyzeBatchHandler(modelClient, clock);
+        AnalyzeTextHandler = new AnalyzeTextHandler(modelClient, analysisCaptureScheduler, clock);
+        AnalyzeBatchHandler = new AnalyzeBatchHandler(modelClient, analysisCaptureScheduler, clock);
     }
 
     public FakeModelPredictionClient ModelClient { get; }
+
+    public FakeAnalysisCaptureScheduler AnalysisCaptureScheduler { get; }
 
     public FakeClock Clock { get; }
 
@@ -29,8 +33,26 @@ internal sealed class TestFixture
     public static TestFixture Create()
     {
         var modelClient = new FakeModelPredictionClient();
+        var analysisCaptureScheduler = new FakeAnalysisCaptureScheduler();
         var clock = new FakeClock(new DateTimeOffset(2026, 4, 29, 12, 0, 0, TimeSpan.Zero));
-        return new TestFixture(modelClient, clock);
+        return new TestFixture(modelClient, analysisCaptureScheduler, clock);
+    }
+}
+
+internal sealed class FakeAnalysisCaptureScheduler : IAnalysisCaptureScheduler
+{
+    public List<ToxicityAnalysis> CapturedAnalyses { get; } = [];
+
+    public void Schedule(ToxicityAnalysis analysis)
+    {
+        ArgumentNullException.ThrowIfNull(analysis);
+        CapturedAnalyses.Add(analysis);
+    }
+
+    public void ScheduleBatch(IReadOnlyCollection<ToxicityAnalysis> analyses)
+    {
+        ArgumentNullException.ThrowIfNull(analyses);
+        CapturedAnalyses.AddRange(analyses);
     }
 }
 
