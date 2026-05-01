@@ -95,6 +95,41 @@ public sealed class FakeClock : IClock
     public DateTimeOffset UtcNow { get; }
 }
 
+public sealed class FakeAnalysisTextVotingRepository : IAnalysisTextVotingRepository
+{
+    public AnalysisTextVotingCandidate? RandomCandidate { get; set; }
+
+    public AnalysisTextVotingDetails? Details { get; set; }
+
+    public bool RegisterVoteResult { get; set; } = true;
+
+    public List<(Guid Id, AnalysisTextVoteKind Vote)> RegisteredVotes { get; } = [];
+
+    public void Reset()
+    {
+        RandomCandidate = null;
+        Details = null;
+        RegisterVoteResult = true;
+        RegisteredVotes.Clear();
+    }
+
+    public Task<AnalysisTextVotingCandidate?> GetRandomAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult(RandomCandidate);
+    }
+
+    public Task<AnalysisTextVotingDetails?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(Details);
+    }
+
+    public Task<bool> RegisterVoteAsync(Guid id, AnalysisTextVoteKind vote, CancellationToken cancellationToken)
+    {
+        RegisteredVotes.Add((id, vote));
+        return Task.FromResult(RegisterVoteResult);
+    }
+}
+
 public sealed class FakeAnalysisCaptureScheduler : IAnalysisCaptureScheduler
 {
     public List<ToxicityAnalysis> CapturedAnalyses { get; } = [];

@@ -12,10 +12,93 @@ This document describes the public HTTP contract implemented by the backend MVP 
 
 - `POST /api/v1/toxicity/analyze`
 - `POST /api/v1/toxicity/analyze-batch`
+- `GET /api/v1/toxicity/texts/random`
+- `GET /api/v1/toxicity/texts/{textId}`
+- `POST /api/v1/toxicity/texts/{textId}/vote`
 - `GET /health/live`
 - `GET /health/ready`
 
-The health endpoints are infrastructure endpoints. The public product contract in MVP is the two toxicity endpoints.
+The health endpoints are infrastructure endpoints. The public product contract is the toxicity API surface described below.
+
+## `GET /api/v1/toxicity/texts/random`
+
+### Purpose
+
+Return one stored text for anonymous user voting.
+
+### Response
+
+```json
+{
+  "textId": "string",
+  "text": "some text"
+}
+```
+
+### Response Notes
+
+- `textId` is the persistent identifier of the deduplicated row in `analysis_texts`
+- random selection is weighted to prefer texts with fewer existing votes
+- texts with many votes are still eligible and can still appear
+- if no stored texts are available, the backend returns `404`
+
+## `POST /api/v1/toxicity/texts/{textId}/vote`
+
+### Purpose
+
+Submit an anonymous user vote for a stored text.
+
+### Request
+
+```json
+{
+  "vote": "toxic"
+}
+```
+
+### Request Rules
+
+- `textId` must be a valid GUID path parameter
+- `vote` is required
+- allowed `vote` values: `toxic`, `nonToxic`
+
+### Response
+
+- `204 No Content` when the vote is accepted
+- `404 Not Found` when the text does not exist
+
+## `GET /api/v1/toxicity/texts/{textId}`
+
+### Purpose
+
+Return stored voting data for one text together with the latest model analytics snapshot.
+
+### Response
+
+```json
+{
+  "textId": "string",
+  "text": "some text",
+  "textLength": 9,
+  "requestCount": 4,
+  "lastLabel": 1,
+  "lastToxicProbability": 0.87,
+  "model": {
+    "modelKey": "string",
+    "modelVersion": "string"
+  },
+  "votesToxic": 1,
+  "votesNonToxic": 2,
+  "createdAt": "2026-05-02T09:00:00Z",
+  "lastSeenAt": "2026-05-02T10:00:00Z"
+}
+```
+
+### Response Notes
+
+- response includes the latest stored model snapshot: `lastLabel`, `lastToxicProbability`, and `model`
+- response excludes redundant derived fields such as `votesTotal`
+- returns `404` when the text does not exist
 
 ## `POST /api/v1/toxicity/analyze`
 
@@ -177,6 +260,7 @@ Example validation response:
 ### Current Status Mapping
 
 - `400 Bad Request` for validation failures
+- `404 Not Found` when a requested text resource does not exist
 - `503 Service Unavailable` when the internal `model` service is unavailable or returns an invalid payload
 - `504 Gateway Timeout` when the internal `model` service times out
 - `500 Internal Server Error` for unexpected backend failures
@@ -214,6 +298,7 @@ For explain responses, the backend additionally maps:
 ## Current Implementation Notes
 
 - the backend captures analyzed texts asynchronously into PostgreSQL when `AnalysisCapture` is enabled
+- the backend also serves anonymous random-text retrieval, text lookup, and vote registration from the same PostgreSQL `analysis_texts` table
 - capture does not change the public response contract and is intentionally best-effort
 - no auth layer is implemented yet
 - admin and retraining endpoints are intentionally not part of the public backend MVP

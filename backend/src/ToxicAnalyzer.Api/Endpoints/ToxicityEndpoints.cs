@@ -1,6 +1,9 @@
 using ToxicAnalyzer.Api.Contracts.Toxicity;
 using ToxicAnalyzer.Application.Toxicity.AnalyzeBatch;
 using ToxicAnalyzer.Application.Toxicity.AnalyzeText;
+using ToxicAnalyzer.Application.Toxicity.GetRandomText;
+using ToxicAnalyzer.Application.Toxicity.GetTextById;
+using ToxicAnalyzer.Application.Toxicity.VoteText;
 
 namespace ToxicAnalyzer.Api.Endpoints;
 
@@ -30,6 +33,28 @@ public static class ToxicityEndpoints
             .ProducesProblem(StatusCodes.Status504GatewayTimeout)
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
+        group.MapGet("/texts/random", GetRandomTextAsync)
+            .WithName("GetRandomAnalysisText")
+            .WithSummary("Get a random text for anonymous toxicity voting.")
+            .Produces<GetRandomTextResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        group.MapGet("/texts/{textId:guid}", GetTextByIdAsync)
+            .WithName("GetAnalysisTextById")
+            .WithSummary("Get stored voting information for a text by id.")
+            .Produces<GetTextByIdResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
+        group.MapPost("/texts/{textId:guid}/vote", VoteTextAsync)
+            .WithName("VoteAnalysisText")
+            .WithSummary("Submit an anonymous toxicity vote for a stored text.")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status500InternalServerError);
+
         return endpoints;
     }
 
@@ -54,5 +79,32 @@ public static class ToxicityEndpoints
 
         var result = await handler.HandleAsync(command, cancellationToken);
         return Results.Ok(result.ToResponse());
+    }
+
+    private static async Task<IResult> GetRandomTextAsync(
+        GetRandomTextHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(new GetRandomTextCommand(), cancellationToken);
+        return Results.Ok(result.ToResponse());
+    }
+
+    private static async Task<IResult> GetTextByIdAsync(
+        Guid textId,
+        GetTextByIdHandler handler,
+        CancellationToken cancellationToken)
+    {
+        var result = await handler.HandleAsync(new GetTextByIdCommand(textId), cancellationToken);
+        return Results.Ok(result.ToResponse());
+    }
+
+    private static async Task<IResult> VoteTextAsync(
+        Guid textId,
+        VoteTextRequest request,
+        VoteTextHandler handler,
+        CancellationToken cancellationToken)
+    {
+        await handler.HandleAsync(new VoteTextCommand(textId, request.Vote), cancellationToken);
+        return Results.NoContent();
     }
 }

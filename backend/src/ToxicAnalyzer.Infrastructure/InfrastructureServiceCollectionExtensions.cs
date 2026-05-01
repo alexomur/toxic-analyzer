@@ -79,12 +79,15 @@ public static class InfrastructureServiceCollectionExtensions
 
         if (!options.Enabled)
         {
+            services.AddSingleton<IAnalysisTextVotingRepository, DisabledAnalysisTextVotingRepository>();
             return services;
         }
 
         services.AddSingleton(new AnalysisCaptureQueue(options.QueueCapacity));
         services.AddSingleton<IAnalysisCaptureScheduler, AnalysisCaptureChannelScheduler>();
-        services.AddSingleton<IAnalysisTextStore, PostgresAnalysisTextStore>();
+        services.AddSingleton<PostgresAnalysisTextStore>();
+        services.AddSingleton<IAnalysisTextStore>(serviceProvider => serviceProvider.GetRequiredService<PostgresAnalysisTextStore>());
+        services.AddSingleton<IAnalysisTextVotingRepository>(serviceProvider => serviceProvider.GetRequiredService<PostgresAnalysisTextStore>());
         services.AddHostedService<AnalysisCaptureBackgroundService>();
 
         return services;

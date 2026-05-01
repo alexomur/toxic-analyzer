@@ -1,6 +1,9 @@
 using ToxicAnalyzer.Application.Abstractions;
 using ToxicAnalyzer.Application.Toxicity.AnalyzeBatch;
 using ToxicAnalyzer.Application.Toxicity.AnalyzeText;
+using ToxicAnalyzer.Application.Toxicity.GetRandomText;
+using ToxicAnalyzer.Application.Toxicity.GetTextById;
+using ToxicAnalyzer.Application.Toxicity.VoteText;
 
 namespace ToxicAnalyzer.Api.Common.DependencyInjection;
 
@@ -14,6 +17,9 @@ public static class ApiServiceCollectionExtensions
         services.AddSingleton<IAnalysisCaptureScheduler, NoOpAnalysisCaptureScheduler>();
         services.AddScoped<AnalyzeTextHandler>();
         services.AddScoped<AnalyzeBatchHandler>();
+        services.AddScoped<GetRandomTextHandler>();
+        services.AddScoped<GetTextByIdHandler>();
+        services.AddScoped<VoteTextHandler>();
 
         return services;
     }

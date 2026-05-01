@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ToxicAnalyzer.Application.Abstractions;
 using ToxicAnalyzer.Infrastructure.ModelService;
 
 namespace ToxicAnalyzer.IntegrationTests;
@@ -17,6 +18,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         _factory = factory;
         _factory.ModelPredictionClient.Reset();
         _factory.AnalysisCaptureScheduler.Reset();
+        _factory.AnalysisTextVotingRepository.Reset();
         _client = factory.CreateClient();
     }
 
@@ -298,6 +300,140 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         Assert.Contains(payload.Errors, error => error.Field == "reportLevel");
     }
 
+    [Fact]
+    public async Task GetRandomText_ReturnsCandidate()
+    {
+        var textId = Guid.NewGuid();
+        _factory.AnalysisTextVotingRepository.RandomCandidate = new AnalysisTextVotingCandidate(textId, "stored text");
+
+        var response = await _client.GetAsync("/api/v1/toxicity/texts/random");
+
+        response.EnsureSuccessStatusCode();
+
+        var payload = await response.Content.ReadFromJsonAsync<GetRandomTextResponseContract>(JsonOptions);
+
+        Assert.NotNull(payload);
+        Assert.Equal(textId.ToString(), payload.TextId);
+        Assert.Equal("stored text", payload.Text);
+    }
+
+    [Fact]
+    public async Task GetRandomText_Returns404_WhenNoTextsAvailable()
+    {
+        var response = await _client.GetAsync("/api/v1/toxicity/texts/random");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<ProblemDetailsContract>(JsonOptions);
+
+        Assert.NotNull(payload);
+        Assert.Equal("Resource not found.", payload.Title);
+    }
+
+    [Fact]
+    public async Task GetTextById_ReturnsStoredVotingDetails()
+    {
+        var textId = Guid.NewGuid();
+        _factory.AnalysisTextVotingRepository.Details = new AnalysisTextVotingDetails(
+            textId,
+            "stored text",
+            11,
+            4,
+            1,
+            0.87m,
+            "baseline",
+            "v3.3",
+            1,
+            2,
+            new DateTimeOffset(2026, 5, 2, 9, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 5, 2, 10, 0, 0, TimeSpan.Zero));
+
+        var response = await _client.GetAsync($"/api/v1/toxicity/texts/{textId}");
+
+        response.EnsureSuccessStatusCode();
+
+        var payload = await response.Content.ReadFromJsonAsync<GetTextByIdResponseContract>(JsonOptions);
+
+        Assert.NotNull(payload);
+        Assert.Equal(textId.ToString(), payload.TextId);
+        Assert.Equal("stored text", payload.Text);
+        Assert.Equal(11, payload.TextLength);
+        Assert.Equal(4, payload.RequestCount);
+        Assert.Equal(1, payload.LastLabel);
+        Assert.Equal(0.87m, payload.LastToxicProbability);
+        Assert.Equal("baseline", payload.Model.ModelKey);
+        Assert.Equal("v3.3", payload.Model.ModelVersion);
+        Assert.Equal(1, payload.VotesToxic);
+        Assert.Equal(2, payload.VotesNonToxic);
+    }
+
+    [Fact]
+    public async Task GetTextById_Returns404_WhenTextDoesNotExist()
+    {
+        var textId = Guid.NewGuid();
+
+        var response = await _client.GetAsync($"/api/v1/toxicity/texts/{textId}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<ProblemDetailsContract>(JsonOptions);
+
+        Assert.NotNull(payload);
+        Assert.Equal("Resource not found.", payload.Title);
+    }
+
+    [Fact]
+    public async Task VoteText_Returns204_ForToxicVote()
+    {
+        var textId = Guid.NewGuid();
+
+        var response = await _client.PostAsJsonAsync($"/api/v1/toxicity/texts/{textId}/vote", new
+        {
+            vote = "toxic"
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Single(_factory.AnalysisTextVotingRepository.RegisteredVotes);
+        Assert.Equal((textId, AnalysisTextVoteKind.Toxic), _factory.AnalysisTextVotingRepository.RegisteredVotes[0]);
+    }
+
+    [Fact]
+    public async Task VoteText_Returns400_ForInvalidVote()
+    {
+        var textId = Guid.NewGuid();
+
+        var response = await _client.PostAsJsonAsync($"/api/v1/toxicity/texts/{textId}/vote", new
+        {
+            vote = "invalid"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<ProblemDetailsContract>(JsonOptions);
+
+        Assert.NotNull(payload);
+        Assert.Contains(payload.Errors, error => error.Field == "vote");
+    }
+
+    [Fact]
+    public async Task VoteText_Returns404_WhenTextDoesNotExist()
+    {
+        var textId = Guid.NewGuid();
+        _factory.AnalysisTextVotingRepository.RegisterVoteResult = false;
+
+        var response = await _client.PostAsJsonAsync($"/api/v1/toxicity/texts/{textId}/vote", new
+        {
+            vote = "nonToxic"
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        var payload = await response.Content.ReadFromJsonAsync<ProblemDetailsContract>(JsonOptions);
+
+        Assert.NotNull(payload);
+        Assert.Equal("Resource not found.", payload.Title);
+    }
+
     private sealed record AnalyzeTextResponseContract(
         string AnalysisId,
         int Label,
@@ -322,6 +458,23 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         IReadOnlyList<AnalyzeBatchItemContract> Items,
         BatchSummaryContract Summary,
         DateTimeOffset CreatedAt);
+
+    private sealed record GetRandomTextResponseContract(
+        string TextId,
+        string Text);
+
+    private sealed record GetTextByIdResponseContract(
+        string TextId,
+        string Text,
+        int TextLength,
+        long RequestCount,
+        int LastLabel,
+        decimal LastToxicProbability,
+        ModelInfoContract Model,
+        int VotesToxic,
+        int VotesNonToxic,
+        DateTimeOffset CreatedAt,
+        DateTimeOffset LastSeenAt);
 
     private sealed record AnalyzeBatchItemContract(
         string? ClientItemId,

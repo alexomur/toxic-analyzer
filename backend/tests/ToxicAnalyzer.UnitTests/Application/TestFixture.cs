@@ -1,6 +1,9 @@
 using ToxicAnalyzer.Application.Abstractions;
 using ToxicAnalyzer.Application.Toxicity.AnalyzeBatch;
 using ToxicAnalyzer.Application.Toxicity.AnalyzeText;
+using ToxicAnalyzer.Application.Toxicity.GetRandomText;
+using ToxicAnalyzer.Application.Toxicity.GetTextById;
+using ToxicAnalyzer.Application.Toxicity.VoteText;
 using ToxicAnalyzer.Domain.Analysis;
 using ToxicAnalyzer.Domain.Texts;
 
@@ -11,13 +14,18 @@ internal sealed class TestFixture
     private TestFixture(
         FakeModelPredictionClient modelClient,
         FakeAnalysisCaptureScheduler analysisCaptureScheduler,
-        FakeClock clock)
+        FakeClock clock,
+        FakeAnalysisTextVotingRepository analysisTextVotingRepository)
     {
         ModelClient = modelClient;
         AnalysisCaptureScheduler = analysisCaptureScheduler;
         Clock = clock;
+        AnalysisTextVotingRepository = analysisTextVotingRepository;
         AnalyzeTextHandler = new AnalyzeTextHandler(modelClient, analysisCaptureScheduler, clock);
         AnalyzeBatchHandler = new AnalyzeBatchHandler(modelClient, analysisCaptureScheduler, clock);
+        GetRandomTextHandler = new GetRandomTextHandler(analysisTextVotingRepository);
+        GetTextByIdHandler = new GetTextByIdHandler(analysisTextVotingRepository);
+        VoteTextHandler = new VoteTextHandler(analysisTextVotingRepository);
     }
 
     public FakeModelPredictionClient ModelClient { get; }
@@ -26,16 +34,52 @@ internal sealed class TestFixture
 
     public FakeClock Clock { get; }
 
+    public FakeAnalysisTextVotingRepository AnalysisTextVotingRepository { get; }
+
     public AnalyzeTextHandler AnalyzeTextHandler { get; }
 
     public AnalyzeBatchHandler AnalyzeBatchHandler { get; }
+
+    public GetRandomTextHandler GetRandomTextHandler { get; }
+
+    public GetTextByIdHandler GetTextByIdHandler { get; }
+
+    public VoteTextHandler VoteTextHandler { get; }
 
     public static TestFixture Create()
     {
         var modelClient = new FakeModelPredictionClient();
         var analysisCaptureScheduler = new FakeAnalysisCaptureScheduler();
         var clock = new FakeClock(new DateTimeOffset(2026, 4, 29, 12, 0, 0, TimeSpan.Zero));
-        return new TestFixture(modelClient, analysisCaptureScheduler, clock);
+        var analysisTextVotingRepository = new FakeAnalysisTextVotingRepository();
+        return new TestFixture(modelClient, analysisCaptureScheduler, clock, analysisTextVotingRepository);
+    }
+}
+
+internal sealed class FakeAnalysisTextVotingRepository : IAnalysisTextVotingRepository
+{
+    public AnalysisTextVotingCandidate? RandomCandidate { get; set; }
+
+    public AnalysisTextVotingDetails? Details { get; set; }
+
+    public bool RegisterVoteResult { get; set; } = true;
+
+    public List<(Guid Id, AnalysisTextVoteKind Vote)> RegisteredVotes { get; } = [];
+
+    public Task<AnalysisTextVotingCandidate?> GetRandomAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult(RandomCandidate);
+    }
+
+    public Task<AnalysisTextVotingDetails?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(Details);
+    }
+
+    public Task<bool> RegisterVoteAsync(Guid id, AnalysisTextVoteKind vote, CancellationToken cancellationToken)
+    {
+        RegisteredVotes.Add((id, vote));
+        return Task.FromResult(RegisterVoteResult);
     }
 }
 

@@ -1,10 +1,11 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
+using ToxicAnalyzer.Application.Abstractions;
 
 namespace ToxicAnalyzer.Infrastructure.AnalysisCapture;
 
-public sealed class PostgresAnalysisTextStore : IAnalysisTextStore
+public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTextVotingRepository
 {
     private readonly AnalysisCaptureOptions _options;
     private readonly ILogger<PostgresAnalysisTextStore> _logger;
@@ -63,6 +64,74 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore
         await batch.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task<AnalysisTextVotingCandidate?> GetRandomAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(_normalizedConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await EnsureSchemaReadyAsync(connection, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = BuildGetRandomSql(_options.Schema);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new AnalysisTextVotingCandidate(
+            reader.GetGuid(0),
+            reader.GetString(1));
+    }
+
+    public async Task<AnalysisTextVotingDetails?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(_normalizedConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await EnsureSchemaReadyAsync(connection, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = BuildGetByIdSql(_options.Schema);
+        command.Parameters.AddWithValue("id", id);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new AnalysisTextVotingDetails(
+            reader.GetGuid(0),
+            reader.GetString(1),
+            reader.GetInt32(2),
+            reader.GetInt64(3),
+            reader.GetInt16(4),
+            Convert.ToDecimal(reader.GetValue(5)),
+            reader.GetString(6),
+            reader.GetString(7),
+            reader.GetInt32(8),
+            reader.GetInt32(9),
+            reader.GetFieldValue<DateTimeOffset>(10),
+            reader.GetFieldValue<DateTimeOffset>(11));
+    }
+
+    public async Task<bool> RegisterVoteAsync(Guid id, AnalysisTextVoteKind vote, CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(_normalizedConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await EnsureSchemaReadyAsync(connection, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = BuildRegisterVoteSql(_options.Schema);
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("vote", (short)vote);
+
+        var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+        return rowsAffected > 0;
+    }
+
     private async Task EnsureSchemaAsync(NpgsqlConnection connection, CancellationToken cancellationToken)
     {
         if (!AnalysisCaptureOptions.IsValidSchema(_options.Schema))
@@ -75,6 +144,17 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore
         await command.ExecuteNonQueryAsync(cancellationToken);
 
         _logger.LogInformation("Analysis capture schema is ready in PostgreSQL schema {Schema}.", _options.Schema);
+    }
+
+    private async Task EnsureSchemaReadyAsync(NpgsqlConnection connection, CancellationToken cancellationToken)
+    {
+        if (_schemaEnsured)
+        {
+            return;
+        }
+
+        await EnsureSchemaAsync(connection, cancellationToken);
+        _schemaEnsured = true;
     }
 
     private static string BuildEnsureSchemaSql(string schema)
@@ -96,19 +176,66 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore
             source_kind TEXT NOT NULL,
             actor_id TEXT,
             tenant_id TEXT,
-            votes_total INTEGER NOT NULL DEFAULT 0 CHECK (votes_total >= 0),
             votes_toxic INTEGER NOT NULL DEFAULT 0 CHECK (votes_toxic >= 0),
             votes_non_toxic INTEGER NOT NULL DEFAULT 0 CHECK (votes_non_toxic >= 0),
             created_at TIMESTAMPTZ NOT NULL,
-            last_seen_at TIMESTAMPTZ NOT NULL,
-            CHECK (votes_total = votes_toxic + votes_non_toxic)
+            last_seen_at TIMESTAMPTZ NOT NULL
         );
+
+        ALTER TABLE {{schema}}.analysis_texts
+            ADD COLUMN IF NOT EXISTS votes_toxic INTEGER NOT NULL DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS votes_non_toxic INTEGER NOT NULL DEFAULT 0;
+
+        ALTER TABLE {{schema}}.analysis_texts
+            DROP COLUMN IF EXISTS votes_total CASCADE;
 
         CREATE INDEX IF NOT EXISTS idx_analysis_texts_last_seen_at
             ON {{schema}}.analysis_texts (last_seen_at DESC);
 
         CREATE INDEX IF NOT EXISTS idx_analysis_texts_last_label
             ON {{schema}}.analysis_texts (last_label);
+        """;
+    }
+
+    private static string BuildGetRandomSql(string schema)
+    {
+        return $$"""
+        SELECT id, normalized_text
+        FROM {{schema}}.analysis_texts
+        ORDER BY (-LN(GREATEST(random(), 1e-12)) * (votes_toxic + votes_non_toxic + 1))
+        LIMIT 1;
+        """;
+    }
+
+    private static string BuildRegisterVoteSql(string schema)
+    {
+        return $$"""
+        UPDATE {{schema}}.analysis_texts
+        SET
+            votes_toxic = votes_toxic + CASE WHEN @vote = 1 THEN 1 ELSE 0 END,
+            votes_non_toxic = votes_non_toxic + CASE WHEN @vote = 0 THEN 1 ELSE 0 END
+        WHERE id = @id;
+        """;
+    }
+
+    private static string BuildGetByIdSql(string schema)
+    {
+        return $$"""
+        SELECT
+            id,
+            normalized_text,
+            text_length,
+            request_count,
+            last_label,
+            last_toxic_probability,
+            last_model_key,
+            last_model_version,
+            votes_toxic,
+            votes_non_toxic,
+            created_at,
+            last_seen_at
+        FROM {{schema}}.analysis_texts
+        WHERE id = @id;
         """;
     }
 

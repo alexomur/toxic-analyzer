@@ -1,6 +1,8 @@
 using ToxicAnalyzer.Application.Toxicity;
 using ToxicAnalyzer.Application.Toxicity.AnalyzeBatch;
 using ToxicAnalyzer.Application.Toxicity.AnalyzeText;
+using ToxicAnalyzer.Application.Toxicity.GetRandomText;
+using ToxicAnalyzer.Application.Toxicity.GetTextById;
 
 namespace ToxicAnalyzer.Api.Contracts.Toxicity;
 
@@ -25,6 +27,27 @@ internal static class ToxicityContractMappings
             result.Items.Select(ToBatchItemResponse).ToArray(),
             ToSummaryResponse(result.Summary),
             result.CreatedAt);
+    }
+
+    public static GetRandomTextResponse ToResponse(this GetRandomTextResult result)
+    {
+        return new GetRandomTextResponse(result.TextId, result.Text);
+    }
+
+    public static GetTextByIdResponse ToResponse(this GetTextByIdResult result)
+    {
+        return new GetTextByIdResponse(
+            result.TextId,
+            result.Text,
+            result.TextLength,
+            result.RequestCount,
+            result.LastLabel,
+            result.LastToxicProbability,
+            new ModelInfoResponse(result.LastModelKey, result.LastModelVersion),
+            result.VotesToxic,
+            result.VotesNonToxic,
+            result.CreatedAt,
+            result.LastSeenAt);
     }
 
     private static AnalyzeBatchItemResponse ToBatchItemResponse(AnalyzeBatchResultItem item)

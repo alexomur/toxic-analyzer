@@ -60,6 +60,7 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
         return exception switch
         {
             ValidationException => (StatusCodes.Status400BadRequest, "Request validation failed."),
+            NotFoundException => (StatusCodes.Status404NotFound, "Resource not found."),
             ModelServiceException { FailureKind: ModelServiceFailureKind.Timeout } =>
                 (StatusCodes.Status504GatewayTimeout, "Model service timeout."),
             ModelServiceException => (StatusCodes.Status503ServiceUnavailable, "Model service unavailable."),

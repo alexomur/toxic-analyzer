@@ -22,10 +22,13 @@
 
 ## Implemented Public API
 
-The MVP backend exposes two public endpoints:
+The backend currently exposes these public endpoints:
 
 - `POST /api/v1/toxicity/analyze`
 - `POST /api/v1/toxicity/analyze-batch`
+- `GET /api/v1/toxicity/texts/random`
+- `GET /api/v1/toxicity/texts/{textId}` - stored text, vote counters, and last model snapshot
+- `POST /api/v1/toxicity/texts/{textId}/vote`
 
 Supporting endpoints:
 
@@ -68,9 +71,11 @@ The current storage model intentionally keeps only one row per normalized text i
 
 - deduplication key: SHA-256 fingerprint of the normalized text
 - stored text payload: normalized text only
-- counters: `request_count`, `votes_total`, `votes_toxic`, `votes_non_toxic`
+- counters: `request_count`, `votes_toxic`, `votes_non_toxic`
 - latest model snapshot: `last_label`, `last_toxic_probability`, `last_model_key`, `last_model_version`
 - timestamps: `created_at`, `last_seen_at`
+
+Anonymous voting uses the same table. Random text retrieval prefers rows with fewer total votes through weighted random ordering, while still allowing heavily voted texts to reappear sometimes.
 
 This keeps the database compact and avoids coupling HTTP latency to PostgreSQL writes. Queue overflow or transient database failures can drop capture messages; the public inference response is not blocked by capture.
 
