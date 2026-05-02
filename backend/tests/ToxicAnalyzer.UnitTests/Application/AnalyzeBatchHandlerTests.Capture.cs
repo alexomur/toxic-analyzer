@@ -23,6 +23,6 @@ public sealed partial class AnalyzeBatchHandlerTests
             CancellationToken.None);
 
         Assert.Equal(2, fixture.AnalysisCaptureScheduler.CapturedAnalyses.Count);
-        Assert.Equal(["first", "second"], fixture.AnalysisCaptureScheduler.CapturedAnalyses.Select(item => item.Text.Original).ToArray());
+        Assert.Equal(["first", "second"], fixture.AnalysisCaptureScheduler.CapturedAnalyses.Select(item => item.Analysis.Text.Original).ToArray());
     }
 }

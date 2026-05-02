@@ -24,16 +24,22 @@ export class ToxicityBackendTimeoutError extends ToxicityBackendClientError {
 export interface ToxicityBackendClientOptions {
   baseUrl: string;
   timeoutMs: number;
+  authToken?: string;
+  serviceClientId?: string;
+  serviceClientSecret?: string;
   fetchImpl?: typeof fetch;
 }
 
 export class ToxicityBackendClient {
   private readonly fetchImpl: typeof fetch;
   private readonly endpoint: URL;
+  private readonly serviceTokenEndpoint: URL;
+  private cachedAccessToken?: CachedAccessToken;
 
   public constructor(private readonly options: ToxicityBackendClientOptions) {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.endpoint = new URL("/api/v1/toxicity/analyze", ensureTrailingSlash(options.baseUrl));
+    this.serviceTokenEndpoint = new URL("/api/v1/auth/service-token", ensureTrailingSlash(options.baseUrl));
   }
 
   public async analyze(text: string): Promise<ToxicityAnalysisResult> {
@@ -44,7 +50,8 @@ export class ToxicityBackendClient {
       const response = await this.fetchImpl(this.endpoint, {
         method: "POST",
         headers: {
-          "content-type": "application/json"
+          "content-type": "application/json",
+          ...createAuthorizationHeader(await this.getAuthorizationToken())
         },
         body: JSON.stringify({
           text,
@@ -79,6 +86,49 @@ export class ToxicityBackendClient {
       clearTimeout(timeout);
     }
   }
+
+  private async getAuthorizationToken(): Promise<string | undefined> {
+    if (this.options.authToken !== undefined) {
+      return this.options.authToken;
+    }
+
+    if (this.options.serviceClientId === undefined || this.options.serviceClientSecret === undefined) {
+      return undefined;
+    }
+
+    if (this.cachedAccessToken !== undefined && this.cachedAccessToken.expiresAt > Date.now() + 30_000) {
+      return this.cachedAccessToken.accessToken;
+    }
+
+    const response = await this.fetchImpl(this.serviceTokenEndpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        clientId: this.options.serviceClientId,
+        clientSecret: this.options.serviceClientSecret
+      })
+    });
+
+    const payload = await parseJsonResponse(response);
+
+    if (!response.ok || !isServiceTokenResponse(payload)) {
+      throw new ToxicityBackendClientError(
+        `Backend service-token request failed with status ${response.status}.`,
+        response.status,
+        isTemporaryStatus(response.status),
+        isProblemDetailsError(payload) ? payload : undefined
+      );
+    }
+
+    this.cachedAccessToken = {
+      accessToken: payload.accessToken,
+      expiresAt: Date.parse(payload.expiresAt)
+    };
+
+    return this.cachedAccessToken.accessToken;
+  }
 }
 
 function ensureTrailingSlash(baseUrl: string): string {
@@ -105,4 +155,27 @@ function isAbortError(error: unknown): boolean {
 
 function isProblemDetailsError(value: unknown): value is ProblemDetailsError {
   return typeof value === "object" && value !== null;
+}
+
+function createAuthorizationHeader(authToken?: string): Record<string, string> {
+  return authToken
+    ? { authorization: `Bearer ${authToken}` }
+    : {};
+}
+
+function isServiceTokenResponse(value: unknown): value is ServiceTokenResponse {
+  return typeof value === "object" &&
+    value !== null &&
+    typeof (value as ServiceTokenResponse).accessToken === "string" &&
+    typeof (value as ServiceTokenResponse).expiresAt === "string";
+}
+
+interface CachedAccessToken {
+  accessToken: string;
+  expiresAt: number;
+}
+
+interface ServiceTokenResponse {
+  accessToken: string;
+  expiresAt: string;
 }

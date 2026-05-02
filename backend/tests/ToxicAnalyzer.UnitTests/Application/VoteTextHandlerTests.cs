@@ -17,7 +17,8 @@ public sealed class VoteTextHandlerTests
             CancellationToken.None);
 
         Assert.Single(fixture.AnalysisTextVotingRepository.RegisteredVotes);
-        Assert.Equal((textId, AnalysisTextVoteKind.Toxic), fixture.AnalysisTextVotingRepository.RegisteredVotes[0]);
+        Assert.Equal(textId, fixture.AnalysisTextVotingRepository.RegisteredVotes[0].Id);
+        Assert.Equal(AnalysisTextVoteKind.Toxic, fixture.AnalysisTextVotingRepository.RegisteredVotes[0].Vote);
     }
 
     [Fact]
@@ -31,7 +32,8 @@ public sealed class VoteTextHandlerTests
             CancellationToken.None);
 
         Assert.Single(fixture.AnalysisTextVotingRepository.RegisteredVotes);
-        Assert.Equal((textId, AnalysisTextVoteKind.NonToxic), fixture.AnalysisTextVotingRepository.RegisteredVotes[0]);
+        Assert.Equal(textId, fixture.AnalysisTextVotingRepository.RegisteredVotes[0].Id);
+        Assert.Equal(AnalysisTextVoteKind.NonToxic, fixture.AnalysisTextVotingRepository.RegisteredVotes[0].Vote);
     }
 
     [Fact]

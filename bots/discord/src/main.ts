@@ -12,7 +12,10 @@ async function main(): Promise<void> {
   const discordClient = createDiscordClient();
   const toxicityClient = new ToxicityBackendClient({
     baseUrl: config.backendBaseUrl,
-    timeoutMs: config.backendTimeoutMs
+    timeoutMs: config.backendTimeoutMs,
+    authToken: config.backendAuthToken,
+    serviceClientId: config.backendServiceClientId,
+    serviceClientSecret: config.backendServiceClientSecret
   });
   const alertPublisher = new AlertPublisher(
     discordClient,

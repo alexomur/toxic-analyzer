@@ -9,15 +9,18 @@ public sealed class AnalyzeBatchHandler
 {
     private readonly IModelPredictionClient _modelPredictionClient;
     private readonly IAnalysisCaptureScheduler _analysisCaptureScheduler;
+    private readonly ICurrentActorAccessor _currentActorAccessor;
     private readonly IClock _clock;
 
     public AnalyzeBatchHandler(
         IModelPredictionClient modelPredictionClient,
         IAnalysisCaptureScheduler analysisCaptureScheduler,
+        ICurrentActorAccessor currentActorAccessor,
         IClock clock)
     {
         _modelPredictionClient = modelPredictionClient;
         _analysisCaptureScheduler = analysisCaptureScheduler;
+        _currentActorAccessor = currentActorAccessor;
         _clock = clock;
     }
 
@@ -63,7 +66,8 @@ public sealed class AnalyzeBatchHandler
         }
 
         var batch = Domain.Analysis.AnalysisBatch.Create(analysisItems, createdAt);
-        _analysisCaptureScheduler.ScheduleBatch(analysisItems.Select(item => item.Analysis).ToArray());
+        var actor = _currentActorAccessor.GetCurrent();
+        _analysisCaptureScheduler.ScheduleBatch(analysisItems.Select(item => item.Analysis).ToArray(), actor);
 
         return new AnalyzeBatchResult(
             batch.Id.ToString(),

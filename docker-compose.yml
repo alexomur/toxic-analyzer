@@ -57,6 +57,10 @@ services:
       AnalysisCapture__Enabled: "true"
       AnalysisCapture__ConnectionString: postgresql://${POSTGRES_USER:-toxic_model}:${POSTGRES_PASSWORD:-toxic_model_pw}@postgres:5432/${POSTGRES_DB:-toxic_analyzer}
       AnalysisCapture__Schema: public
+      Auth__ConnectionString: postgresql://${POSTGRES_USER:-toxic_model}:${POSTGRES_PASSWORD:-toxic_model_pw}@postgres:5432/${POSTGRES_DB:-toxic_analyzer}
+      Auth__Schema: public
+      Auth__BootstrapAdminEmail: ${BACKEND_BOOTSTRAP_ADMIN_EMAIL:-admin@local.test}
+      Auth__BootstrapAdminPassword: ${BACKEND_BOOTSTRAP_ADMIN_PASSWORD:-Admin12345!}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:

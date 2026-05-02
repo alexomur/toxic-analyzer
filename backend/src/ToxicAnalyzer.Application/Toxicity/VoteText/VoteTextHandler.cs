@@ -6,10 +6,14 @@ namespace ToxicAnalyzer.Application.Toxicity.VoteText;
 public sealed class VoteTextHandler
 {
     private readonly IAnalysisTextVotingRepository _repository;
+    private readonly ICurrentActorAccessor _currentActorAccessor;
 
-    public VoteTextHandler(IAnalysisTextVotingRepository repository)
+    public VoteTextHandler(
+        IAnalysisTextVotingRepository repository,
+        ICurrentActorAccessor currentActorAccessor)
     {
         _repository = repository;
+        _currentActorAccessor = currentActorAccessor;
     }
 
     public async Task HandleAsync(
@@ -19,7 +23,8 @@ public sealed class VoteTextHandler
         ArgumentNullException.ThrowIfNull(command);
 
         var vote = ResolveVote(command.Vote);
-        var updated = await _repository.RegisterVoteAsync(command.TextId, vote, cancellationToken);
+        var actor = _currentActorAccessor.GetCurrent();
+        var updated = await _repository.RegisterVoteAsync(command.TextId, vote, actor, cancellationToken);
 
         if (!updated)
         {

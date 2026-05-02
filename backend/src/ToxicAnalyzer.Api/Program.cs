@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using ToxicAnalyzer.Api.Common.Auth;
 using ToxicAnalyzer.Api.Common.DependencyInjection;
 using ToxicAnalyzer.Api.Common.ErrorHandling;
 using ToxicAnalyzer.Api.Endpoints;
@@ -10,8 +11,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddOpenApi();
-builder.Services.AddApiServices();
+builder.Services.AddAuthInfrastructure(builder.Configuration);
+builder.Services.AddApiServices(builder.Configuration);
 builder.Services.AddModelServiceInfrastructure(builder.Configuration);
 builder.Services.AddAnalysisCaptureInfrastructure(builder.Configuration);
 builder.Services
@@ -22,10 +23,16 @@ builder.Services
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseMiddleware<CsrfProtectionMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger(options =>
+    {
+        options.RouteTemplate = "openapi/{documentName}.json";
+    });
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/openapi/v1.json", "Toxic Analyzer API v1");
@@ -44,6 +51,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 });
 
 app.MapToxicityEndpoints();
+app.MapAuthEndpoints();
 
 app.Run();
 

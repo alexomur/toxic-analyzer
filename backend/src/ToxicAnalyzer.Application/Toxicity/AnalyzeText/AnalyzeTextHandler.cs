@@ -8,15 +8,18 @@ public sealed class AnalyzeTextHandler
 {
     private readonly IModelPredictionClient _modelPredictionClient;
     private readonly IAnalysisCaptureScheduler _analysisCaptureScheduler;
+    private readonly ICurrentActorAccessor _currentActorAccessor;
     private readonly IClock _clock;
 
     public AnalyzeTextHandler(
         IModelPredictionClient modelPredictionClient,
         IAnalysisCaptureScheduler analysisCaptureScheduler,
+        ICurrentActorAccessor currentActorAccessor,
         IClock clock)
     {
         _modelPredictionClient = modelPredictionClient;
         _analysisCaptureScheduler = analysisCaptureScheduler;
+        _currentActorAccessor = currentActorAccessor;
         _clock = clock;
     }
 
@@ -30,7 +33,8 @@ public sealed class AnalyzeTextHandler
         var reportLevel = ResolveReportLevel(command.ReportLevel);
         var (prediction, explanation) = await PredictAsync(text, reportLevel, cancellationToken);
         var analysis = ToxicityMappings.ToAnalysis(text, prediction, _clock.UtcNow);
-        _analysisCaptureScheduler.Schedule(analysis);
+        var actor = _currentActorAccessor.GetCurrent();
+        _analysisCaptureScheduler.Schedule(analysis, actor);
 
         return new AnalyzeTextResult(
             analysis.Id.ToString(),

@@ -6,8 +6,6 @@ namespace ToxicAnalyzer.Infrastructure.AnalysisCapture;
 
 public sealed class AnalysisCaptureChannelScheduler : IAnalysisCaptureScheduler
 {
-    private const string SourceKind = "public_api";
-
     private readonly AnalysisCaptureQueue _queue;
     private readonly ILogger<AnalysisCaptureChannelScheduler> _logger;
 
@@ -19,19 +17,21 @@ public sealed class AnalysisCaptureChannelScheduler : IAnalysisCaptureScheduler
         _logger = logger;
     }
 
-    public void Schedule(ToxicityAnalysis analysis)
+    public void Schedule(ToxicityAnalysis analysis, CurrentActor actor)
     {
         ArgumentNullException.ThrowIfNull(analysis);
-        TrySchedule(AnalysisCaptureMessage.FromAnalysis(analysis, SourceKind));
+        ArgumentNullException.ThrowIfNull(actor);
+        TrySchedule(AnalysisCaptureMessage.FromAnalysis(analysis, actor.SourceKind, actor.SubjectId, actor.TenantId));
     }
 
-    public void ScheduleBatch(IReadOnlyCollection<ToxicityAnalysis> analyses)
+    public void ScheduleBatch(IReadOnlyCollection<ToxicityAnalysis> analyses, CurrentActor actor)
     {
         ArgumentNullException.ThrowIfNull(analyses);
+        ArgumentNullException.ThrowIfNull(actor);
 
         foreach (var analysis in analyses)
         {
-            TrySchedule(AnalysisCaptureMessage.FromAnalysis(analysis, SourceKind));
+            TrySchedule(AnalysisCaptureMessage.FromAnalysis(analysis, actor.SourceKind, actor.SubjectId, actor.TenantId));
         }
     }
 

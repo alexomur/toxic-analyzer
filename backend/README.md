@@ -29,6 +29,12 @@ The backend currently exposes these public endpoints:
 - `GET /api/v1/toxicity/texts/random`
 - `GET /api/v1/toxicity/texts/{textId}` - stored text, vote counters, and last model snapshot
 - `POST /api/v1/toxicity/texts/{textId}/vote`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/service-token`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
+- `GET /api/v1/auth/admin-access` - capability check for `admin.users.manage`
 
 Supporting endpoints:
 
@@ -60,8 +66,7 @@ Batch analysis:
 
 Current non-goals in the backend implementation:
 
-- no public auth layer yet
-- no public admin or retraining endpoints
+- no public retraining endpoints yet
 
 ## Analysis Capture Storage
 
@@ -104,6 +109,12 @@ Primary settings live in `backend/src/ToxicAnalyzer.Api/appsettings.json`.
 - `AnalysisCapture:QueueCapacity` defaults to `4096`
 - `AnalysisCapture:BatchSize` defaults to `128`
 - `AnalysisCapture:FlushInterval` defaults to `00:00:02`
+- `Auth:ConnectionString` is required for browser-session auth and service-client token issuance
+- `Auth:Schema` defaults to `public`
+- `Auth:TrustedServiceRole` defaults to `trusted_service`
+- `Auth:BrowserSessionLifetime` defaults to `7` days
+- `Auth:ServiceAccessTokenLifetime` defaults to `15` minutes
+- `Auth:BootstrapAdminEmail` and `Auth:BootstrapAdminPassword` are development-only bootstrap credentials
 
 For local `dotnet run`, launch profiles are defined in `backend/src/ToxicAnalyzer.Api/Properties/launchSettings.json`.
 
@@ -133,6 +144,59 @@ The repository-level `docker compose` starts the intended local stack:
 - `backend`
 
 The backend container listens on port `8080`, points to `http://model:8000/`, and enables PostgreSQL-backed analysis capture against the same local `postgres` service.
+
+For local development, the compose file also wires auth storage to the same PostgreSQL instance and bootstraps a default admin account:
+
+- email: `admin@local.test`
+- password: `Admin12345!`
+
+Override these values with `BACKEND_BOOTSTRAP_ADMIN_EMAIL` and `BACKEND_BOOTSTRAP_ADMIN_PASSWORD`.
+
+## Auth Architecture
+
+The backend now uses a split auth model:
+
+- browser/frontend users authenticate with HttpOnly cookie sessions and CSRF protection
+- bots and services authenticate with client credentials and receive short-lived bearer JWT access tokens from the backend
+- authorization is capability-based, with the current foundation including `analysis.read`, `analysis.vote`, `model.reload`, `model.retrain`, `dataset.update`, and `admin.users.manage`
+
+Layering is intentionally separated:
+
+- `ToxicAnalyzer.Api` keeps HTTP endpoints, auth handlers, cookie serialization, CSRF middleware, and policy wiring
+- `ToxicAnalyzer.Application` owns auth use cases, auth abstractions, and actor/capability contracts
+- `ToxicAnalyzer.Infrastructure` owns PostgreSQL auth persistence, service-client storage, JWT issuance, and development bootstrap persistence
+
+## Auth Storage
+
+Auth persistence now includes these PostgreSQL tables under `Auth:Schema`:
+
+- `auth_users`
+- `auth_sessions`
+- `auth_user_permissions`
+- `auth_role_permissions`
+- `auth_service_clients`
+- `auth_service_client_secrets`
+- `auth_service_client_permissions`
+
+Default role permissions are seeded for `member` and `admin`. Service clients are first-class subjects with explicit capability grants; `is_trusted` does not imply admin access.
+
+## Swagger Auth Testing
+
+Swagger UI is available at `/swagger` in development and can exercise the real auth flow without special dev-only endpoints.
+
+Browser-session flow:
+
+1. Call `POST /api/v1/auth/register` or `POST /api/v1/auth/login`.
+2. The response sets the `ta_session` cookie and returns `csrfToken` in the response body.
+3. Call `GET /api/v1/auth/me` to inspect the active actor and confirm the current `csrfToken`.
+4. For session-authenticated write requests such as `POST /api/v1/auth/logout`, paste the `csrfToken` into the `X-CSRF-Token` header parameter shown by Swagger.
+
+Bearer flow:
+
+1. Provision a service client plus at least one hashed secret and explicit capabilities in the auth tables.
+2. Call `POST /api/v1/auth/service-token` with `clientId` and `clientSecret`.
+3. Use Swagger `Authorize` with the returned bearer token.
+4. Call protected bearer-compatible endpoints such as `GET /api/v1/auth/admin-access`.
 
 ## Verification
 

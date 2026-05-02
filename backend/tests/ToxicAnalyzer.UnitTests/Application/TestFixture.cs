@@ -15,17 +15,19 @@ internal sealed class TestFixture
         FakeModelPredictionClient modelClient,
         FakeAnalysisCaptureScheduler analysisCaptureScheduler,
         FakeClock clock,
-        FakeAnalysisTextVotingRepository analysisTextVotingRepository)
+        FakeAnalysisTextVotingRepository analysisTextVotingRepository,
+        FakeCurrentActorAccessor currentActorAccessor)
     {
         ModelClient = modelClient;
         AnalysisCaptureScheduler = analysisCaptureScheduler;
         Clock = clock;
         AnalysisTextVotingRepository = analysisTextVotingRepository;
-        AnalyzeTextHandler = new AnalyzeTextHandler(modelClient, analysisCaptureScheduler, clock);
-        AnalyzeBatchHandler = new AnalyzeBatchHandler(modelClient, analysisCaptureScheduler, clock);
+        CurrentActorAccessor = currentActorAccessor;
+        AnalyzeTextHandler = new AnalyzeTextHandler(modelClient, analysisCaptureScheduler, currentActorAccessor, clock);
+        AnalyzeBatchHandler = new AnalyzeBatchHandler(modelClient, analysisCaptureScheduler, currentActorAccessor, clock);
         GetRandomTextHandler = new GetRandomTextHandler(analysisTextVotingRepository);
         GetTextByIdHandler = new GetTextByIdHandler(analysisTextVotingRepository);
-        VoteTextHandler = new VoteTextHandler(analysisTextVotingRepository);
+        VoteTextHandler = new VoteTextHandler(analysisTextVotingRepository, currentActorAccessor);
     }
 
     public FakeModelPredictionClient ModelClient { get; }
@@ -35,6 +37,8 @@ internal sealed class TestFixture
     public FakeClock Clock { get; }
 
     public FakeAnalysisTextVotingRepository AnalysisTextVotingRepository { get; }
+
+    public FakeCurrentActorAccessor CurrentActorAccessor { get; }
 
     public AnalyzeTextHandler AnalyzeTextHandler { get; }
 
@@ -52,7 +56,8 @@ internal sealed class TestFixture
         var analysisCaptureScheduler = new FakeAnalysisCaptureScheduler();
         var clock = new FakeClock(new DateTimeOffset(2026, 4, 29, 12, 0, 0, TimeSpan.Zero));
         var analysisTextVotingRepository = new FakeAnalysisTextVotingRepository();
-        return new TestFixture(modelClient, analysisCaptureScheduler, clock, analysisTextVotingRepository);
+        var currentActorAccessor = new FakeCurrentActorAccessor();
+        return new TestFixture(modelClient, analysisCaptureScheduler, clock, analysisTextVotingRepository, currentActorAccessor);
     }
 }
 
@@ -64,7 +69,7 @@ internal sealed class FakeAnalysisTextVotingRepository : IAnalysisTextVotingRepo
 
     public bool RegisterVoteResult { get; set; } = true;
 
-    public List<(Guid Id, AnalysisTextVoteKind Vote)> RegisteredVotes { get; } = [];
+    public List<(Guid Id, AnalysisTextVoteKind Vote, CurrentActor Actor)> RegisteredVotes { get; } = [];
 
     public Task<AnalysisTextVotingCandidate?> GetRandomAsync(CancellationToken cancellationToken)
     {
@@ -76,27 +81,37 @@ internal sealed class FakeAnalysisTextVotingRepository : IAnalysisTextVotingRepo
         return Task.FromResult(Details);
     }
 
-    public Task<bool> RegisterVoteAsync(Guid id, AnalysisTextVoteKind vote, CancellationToken cancellationToken)
+    public Task<bool> RegisterVoteAsync(Guid id, AnalysisTextVoteKind vote, CurrentActor actor, CancellationToken cancellationToken)
     {
-        RegisteredVotes.Add((id, vote));
+        RegisteredVotes.Add((id, vote, actor));
         return Task.FromResult(RegisterVoteResult);
     }
 }
 
 internal sealed class FakeAnalysisCaptureScheduler : IAnalysisCaptureScheduler
 {
-    public List<ToxicityAnalysis> CapturedAnalyses { get; } = [];
+    public List<(ToxicityAnalysis Analysis, CurrentActor Actor)> CapturedAnalyses { get; } = [];
 
-    public void Schedule(ToxicityAnalysis analysis)
+    public void Schedule(ToxicityAnalysis analysis, CurrentActor actor)
     {
         ArgumentNullException.ThrowIfNull(analysis);
-        CapturedAnalyses.Add(analysis);
+        CapturedAnalyses.Add((analysis, actor));
     }
 
-    public void ScheduleBatch(IReadOnlyCollection<ToxicityAnalysis> analyses)
+    public void ScheduleBatch(IReadOnlyCollection<ToxicityAnalysis> analyses, CurrentActor actor)
     {
         ArgumentNullException.ThrowIfNull(analyses);
-        CapturedAnalyses.AddRange(analyses);
+        CapturedAnalyses.AddRange(analyses.Select(analysis => (analysis, actor)));
+    }
+}
+
+internal sealed class FakeCurrentActorAccessor : ICurrentActorAccessor
+{
+    public CurrentActor CurrentActor { get; set; } = CurrentActor.Anonymous("anonymous-test-actor");
+
+    public CurrentActor GetCurrent()
+    {
+        return CurrentActor;
     }
 }
 

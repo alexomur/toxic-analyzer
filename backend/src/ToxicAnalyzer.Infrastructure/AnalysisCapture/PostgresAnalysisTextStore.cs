@@ -117,8 +117,10 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
             reader.GetFieldValue<DateTimeOffset>(11));
     }
 
-    public async Task<bool> RegisterVoteAsync(Guid id, AnalysisTextVoteKind vote, CancellationToken cancellationToken)
+    public async Task<bool> RegisterVoteAsync(Guid id, AnalysisTextVoteKind vote, CurrentActor actor, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(actor);
+
         await using var connection = new NpgsqlConnection(_normalizedConnectionString);
         await connection.OpenAsync(cancellationToken);
         await EnsureSchemaReadyAsync(connection, cancellationToken);
@@ -126,7 +128,14 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
         await using var command = connection.CreateCommand();
         command.CommandText = BuildRegisterVoteSql(_options.Schema);
         command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("actor_key", actor.ActorKey);
+        command.Parameters.AddWithValue("actor_type", actor.ActorType.ToString().ToLowerInvariant());
+        command.Parameters.AddWithValue("actor_id", actor.SubjectId);
+        command.Parameters.AddWithValue("tenant_id", (object?)actor.TenantId ?? DBNull.Value);
+        command.Parameters.AddWithValue("source_kind", actor.SourceKind);
         command.Parameters.AddWithValue("vote", (short)vote);
+        command.Parameters.AddWithValue("created_at", DateTimeOffset.UtcNow);
+        command.Parameters.AddWithValue("updated_at", DateTimeOffset.UtcNow);
 
         var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
         return rowsAffected > 0;
@@ -176,33 +185,51 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
             source_kind TEXT NOT NULL,
             actor_id TEXT,
             tenant_id TEXT,
-            votes_toxic INTEGER NOT NULL DEFAULT 0 CHECK (votes_toxic >= 0),
-            votes_non_toxic INTEGER NOT NULL DEFAULT 0 CHECK (votes_non_toxic >= 0),
             created_at TIMESTAMPTZ NOT NULL,
             last_seen_at TIMESTAMPTZ NOT NULL
         );
 
-        ALTER TABLE {{schema}}.analysis_texts
-            ADD COLUMN IF NOT EXISTS votes_toxic INTEGER NOT NULL DEFAULT 0,
-            ADD COLUMN IF NOT EXISTS votes_non_toxic INTEGER NOT NULL DEFAULT 0;
-
-        ALTER TABLE {{schema}}.analysis_texts
-            DROP COLUMN IF EXISTS votes_total CASCADE;
+        CREATE TABLE IF NOT EXISTS {{schema}}.analysis_text_votes (
+            text_id UUID NOT NULL REFERENCES {{schema}}.analysis_texts (id) ON DELETE CASCADE,
+            actor_key TEXT NOT NULL,
+            actor_type TEXT NOT NULL,
+            actor_id TEXT NOT NULL,
+            tenant_id TEXT,
+            source_kind TEXT NOT NULL,
+            vote SMALLINT NOT NULL CHECK (vote IN (0, 1)),
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            PRIMARY KEY (text_id, actor_key)
+        );
 
         CREATE INDEX IF NOT EXISTS idx_analysis_texts_last_seen_at
             ON {{schema}}.analysis_texts (last_seen_at DESC);
 
         CREATE INDEX IF NOT EXISTS idx_analysis_texts_last_label
             ON {{schema}}.analysis_texts (last_label);
+
+        CREATE INDEX IF NOT EXISTS idx_analysis_text_votes_text_id
+            ON {{schema}}.analysis_text_votes (text_id);
         """;
     }
 
     private static string BuildGetRandomSql(string schema)
     {
         return $$"""
-        SELECT id, normalized_text
-        FROM {{schema}}.analysis_texts
-        ORDER BY (-LN(GREATEST(random(), 1e-12)) * (votes_toxic + votes_non_toxic + 1))
+        WITH vote_totals AS (
+            SELECT
+                text_id,
+                COUNT(*) FILTER (WHERE vote = 1) AS votes_toxic,
+                COUNT(*) FILTER (WHERE vote = 0) AS votes_non_toxic
+            FROM {{schema}}.analysis_text_votes
+            GROUP BY text_id
+        )
+        SELECT
+            text.id,
+            text.normalized_text
+        FROM {{schema}}.analysis_texts AS text
+        LEFT JOIN vote_totals ON vote_totals.text_id = text.id
+        ORDER BY (-LN(GREATEST(random(), 1e-12)) * (COALESCE(vote_totals.votes_toxic, 0) + COALESCE(vote_totals.votes_non_toxic, 0) + 1))
         LIMIT 1;
         """;
     }
@@ -210,32 +237,65 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
     private static string BuildRegisterVoteSql(string schema)
     {
         return $$"""
-        UPDATE {{schema}}.analysis_texts
+        INSERT INTO {{schema}}.analysis_text_votes (
+            text_id,
+            actor_key,
+            actor_type,
+            actor_id,
+            tenant_id,
+            source_kind,
+            vote,
+            created_at,
+            updated_at
+        )
+        SELECT
+            text.id,
+            @actor_key,
+            @actor_type,
+            @actor_id,
+            @tenant_id,
+            @source_kind,
+            @vote,
+            @created_at,
+            @updated_at
+        FROM {{schema}}.analysis_texts AS text
+        WHERE text.id = @id
+        ON CONFLICT (text_id, actor_key) DO UPDATE
         SET
-            votes_toxic = votes_toxic + CASE WHEN @vote = 1 THEN 1 ELSE 0 END,
-            votes_non_toxic = votes_non_toxic + CASE WHEN @vote = 0 THEN 1 ELSE 0 END
-        WHERE id = @id;
+            vote = EXCLUDED.vote,
+            tenant_id = EXCLUDED.tenant_id,
+            source_kind = EXCLUDED.source_kind,
+            updated_at = EXCLUDED.updated_at;
         """;
     }
 
     private static string BuildGetByIdSql(string schema)
     {
         return $$"""
+        WITH vote_totals AS (
+            SELECT
+                text_id,
+                COUNT(*) FILTER (WHERE vote = 1) AS votes_toxic,
+                COUNT(*) FILTER (WHERE vote = 0) AS votes_non_toxic
+            FROM {{schema}}.analysis_text_votes
+            GROUP BY text_id
+        )
         SELECT
-            id,
-            normalized_text,
-            text_length,
-            request_count,
-            last_label,
-            last_toxic_probability,
-            last_model_key,
-            last_model_version,
-            votes_toxic,
-            votes_non_toxic,
-            created_at,
-            last_seen_at
-        FROM {{schema}}.analysis_texts
-        WHERE id = @id;
+            text.id,
+            text.normalized_text,
+            text.text_length,
+            text.request_count,
+            text.last_label,
+            text.last_toxic_probability,
+            text.last_model_key,
+            text.last_model_version,
+            COALESCE(vote_totals.votes_toxic, 0) AS votes_toxic,
+            COALESCE(vote_totals.votes_non_toxic, 0) AS votes_non_toxic,
+            text.created_at,
+            text.last_seen_at
+        FROM {{schema}}.analysis_texts AS text
+        LEFT JOIN vote_totals ON vote_totals.text_id = text.id
+        WHERE text.id = @id;
         """;
     }
 

@@ -2,7 +2,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using ToxicAnalyzer.Application.Abstractions;
+using ToxicAnalyzer.Application.Auth;
 using ToxicAnalyzer.Infrastructure.AnalysisCapture;
+using ToxicAnalyzer.Infrastructure.Auth;
 using ToxicAnalyzer.Infrastructure.ModelService;
 
 namespace ToxicAnalyzer.Infrastructure;
@@ -89,6 +91,33 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IAnalysisTextStore>(serviceProvider => serviceProvider.GetRequiredService<PostgresAnalysisTextStore>());
         services.AddSingleton<IAnalysisTextVotingRepository>(serviceProvider => serviceProvider.GetRequiredService<PostgresAnalysisTextStore>());
         services.AddHostedService<AnalysisCaptureBackgroundService>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddAuthInfrastructure(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services
+            .AddOptions<AuthOptions>()
+            .Bind(configuration.GetSection(AuthOptions.SectionName))
+            .Validate(options => !string.IsNullOrWhiteSpace(options.Issuer), $"{AuthOptions.SectionName}:Issuer is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.Audience), $"{AuthOptions.SectionName}:Audience is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.SigningKey) && options.SigningKey.Length >= 32, $"{AuthOptions.SectionName}:SigningKey must be at least 32 characters.")
+            .Validate(options => options.BrowserSessionLifetime > TimeSpan.Zero, $"{AuthOptions.SectionName}:BrowserSessionLifetime must be greater than zero.")
+            .Validate(options => options.ServiceAccessTokenLifetime > TimeSpan.Zero, $"{AuthOptions.SectionName}:ServiceAccessTokenLifetime must be greater than zero.")
+            .ValidateOnStart();
+
+        services.AddSingleton(serviceProvider => serviceProvider.GetRequiredService<IOptions<AuthOptions>>().Value);
+        services.AddSingleton<IPasswordHasher, PasswordHasher>();
+        services.AddSingleton<ISessionTokenService, SessionTokenService>();
+        services.AddSingleton<IAccessTokenIssuer, JwtAccessTokenIssuer>();
+        services.AddSingleton<IAuthStore, PostgresAuthStore>();
+        services.AddHostedService<DevelopmentAdminBootstrapHostedService>();
 
         return services;
     }

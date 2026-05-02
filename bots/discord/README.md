@@ -65,6 +65,9 @@ Copy-Item config.example.json config.json
 
 - `DISCORD_TOKEN` - bot token from Discord Developer Portal
 - `BOT_CONFIG_PATH` - optional path to config JSON, defaults to `./config.json`
+- `BACKEND_AUTH_TOKEN` - optional pre-issued backend bearer token
+- `BACKEND_SERVICE_CLIENT_ID` - optional backend service client id
+- `BACKEND_SERVICE_CLIENT_SECRET` - optional backend service client secret
 - `LOG_LEVEL` - optional pino log level, defaults to `info`
 
 ### `config.json`
@@ -142,6 +145,18 @@ to:
 
 - `POST {backendBaseUrl}/api/v1/toxicity/analyze`
 
+## Optional Backend Service Auth
+
+The bot still works against the public anonymous analyze endpoint. If you want it to act as an identified backend service client, configure `BACKEND_SERVICE_CLIENT_ID` and `BACKEND_SERVICE_CLIENT_SECRET` in `.env`.
+
+At runtime the bot will:
+
+1. call `POST {backendBaseUrl}/api/v1/auth/service-token`
+2. cache the short-lived bearer token
+3. reuse it for analyze requests until it nears expiration
+
+`BACKEND_AUTH_TOKEN` is still supported for pre-issued bearer tokens, but backend-issued client credentials are the preferred flow.
+
 ## Supported Placeholders
 
 - `{messageText}`
@@ -190,5 +205,5 @@ Placeholders are replaced only from this whitelist. Unknown placeholders are lef
 - no multi-guild config model yet
 - no slash commands
 - no storage/history
-- no backend auth yet
+- backend auth is optional; service-token flow is supported
 - no support for non-empty outbound attachments

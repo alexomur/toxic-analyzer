@@ -1,7 +1,9 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ToxicAnalyzer.Application.Abstractions;
+using ToxicAnalyzer.Application.Auth;
 using ToxicAnalyzer.Infrastructure.ModelService;
 
 namespace ToxicAnalyzer.IntegrationTests;
@@ -19,7 +21,19 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         _factory.ModelPredictionClient.Reset();
         _factory.AnalysisCaptureScheduler.Reset();
         _factory.AnalysisTextVotingRepository.Reset();
+        _factory.AuthStore.Reset();
         _client = factory.CreateClient();
+    }
+
+    [Fact]
+    public async Task Analyze_IsAccessible_WithoutAuthentication()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze", new
+        {
+            text = "public analyze"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
@@ -45,7 +59,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         Assert.Equal("v3.3", payload.Model.ModelVersion);
         Assert.Equal("summary", payload.ReportLevel);
         Assert.Null(payload.Explanation);
-        Assert.Equal(new DateTimeOffset(2026, 4, 29, 12, 0, 0, TimeSpan.Zero), payload.CreatedAt);
+        Assert.Equal(_factory.Clock.UtcNow, payload.CreatedAt);
         Assert.Equal(1, _factory.ModelPredictionClient.PredictAsyncCallCount);
         Assert.Equal(0, _factory.ModelPredictionClient.PredictWithExplanationAsyncCallCount);
     }
@@ -72,6 +86,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         Assert.Equal(1, _factory.ModelPredictionClient.PredictAsyncCallCount);
         Assert.Equal(0, _factory.ModelPredictionClient.PredictWithExplanationAsyncCallCount);
         Assert.Single(_factory.AnalysisCaptureScheduler.CapturedAnalyses);
+        Assert.Equal(ActorType.Anonymous, _factory.AnalysisCaptureScheduler.CapturedAnalyses[0].Actor.ActorType);
     }
 
     [Fact]
@@ -152,8 +167,9 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         Assert.Equal(1, payload.Summary.ToxicCount);
         Assert.Equal(1, payload.Summary.NonToxicCount);
         Assert.Equal(0.50m, payload.Summary.AverageToxicProbability);
-        Assert.Equal(new DateTimeOffset(2026, 4, 29, 12, 0, 0, TimeSpan.Zero), payload.CreatedAt);
+        Assert.Equal(_factory.Clock.UtcNow, payload.CreatedAt);
         Assert.Equal(2, _factory.AnalysisCaptureScheduler.CapturedAnalyses.Count);
+        Assert.All(_factory.AnalysisCaptureScheduler.CapturedAnalyses, captured => Assert.Equal(ActorType.Anonymous, captured.Actor.ActorType));
     }
 
     [Fact]
@@ -394,7 +410,9 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Single(_factory.AnalysisTextVotingRepository.RegisteredVotes);
-        Assert.Equal((textId, AnalysisTextVoteKind.Toxic), _factory.AnalysisTextVotingRepository.RegisteredVotes[0]);
+        Assert.Equal(textId, _factory.AnalysisTextVotingRepository.RegisteredVotes[0].Id);
+        Assert.Equal(AnalysisTextVoteKind.Toxic, _factory.AnalysisTextVotingRepository.RegisteredVotes[0].Vote);
+        Assert.Equal(ActorType.Anonymous, _factory.AnalysisTextVotingRepository.RegisteredVotes[0].Actor.ActorType);
     }
 
     [Fact]
@@ -432,6 +450,229 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
 
         Assert.NotNull(payload);
         Assert.Equal("Resource not found.", payload.Title);
+    }
+
+    [Fact]
+    public async Task Analyze_WithServiceToken_CapturesServiceActor()
+    {
+        _factory.ModelPredictionClient.Reset();
+        _factory.ModelPredictionClient.SinglePrediction = FakeModelPredictionClient.CreatePrediction(0, 0.12m);
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            ApiWebApplicationFactory.CreateAccessToken(
+                subjectId: "discord-bot-1",
+                actorType: "service",
+                roles: ["trusted_service"],
+                capabilities: [AuthCapabilities.AnalysisRead],
+                clientId: "discord-bot"));
+
+        var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze", new
+        {
+            text = "service-auth"
+        });
+
+        response.EnsureSuccessStatusCode();
+
+        Assert.Single(_factory.AnalysisCaptureScheduler.CapturedAnalyses);
+        Assert.Equal(ActorType.Service, _factory.AnalysisCaptureScheduler.CapturedAnalyses[0].Actor.ActorType);
+        Assert.Equal("discord-bot-1", _factory.AnalysisCaptureScheduler.CapturedAnalyses[0].Actor.SubjectId);
+        Assert.Equal("discord-bot", _factory.AnalysisCaptureScheduler.CapturedAnalyses[0].Actor.ClientId);
+    }
+
+    [Fact]
+    public async Task AuthMe_Returns401_WithoutToken()
+    {
+        var response = await _client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AuthMe_ReturnsActorPayload_ForAuthenticatedUser()
+    {
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            ApiWebApplicationFactory.CreateAccessToken(
+                subjectId: "user-123",
+                actorType: "user",
+                roles: ["member"],
+                capabilities: [AuthCapabilities.AnalysisRead, AuthCapabilities.AnalysisVote],
+                tenantId: "discord:guild-1"));
+
+        var response = await _client.GetAsync("/api/v1/auth/me");
+
+        response.EnsureSuccessStatusCode();
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+
+        Assert.Equal("user", root.GetProperty("actorType").GetString());
+        Assert.Equal("user-123", root.GetProperty("subjectId").GetString());
+        Assert.Equal("discord:guild-1", root.GetProperty("tenantId").GetString());
+        Assert.Contains(AuthCapabilities.AnalysisRead, root.GetProperty("capabilities").EnumerateArray().Select(element => element.GetString()));
+    }
+
+    [Fact]
+    public async Task Register_CreatesBrowserSession_AndAuthMeReturnsSessionActor()
+    {
+        var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", new
+        {
+            email = "user@example.com",
+            password = "strong-password",
+            username = "tester"
+        });
+
+        Assert.Equal(HttpStatusCode.Created, registerResponse.StatusCode);
+        Assert.Contains(registerResponse.Headers.TryGetValues("Set-Cookie", out var setCookieValues) ? setCookieValues : [], value => value.Contains("ta_session="));
+        var registerPayload = await registerResponse.Content.ReadFromJsonAsync<AuthSessionContract>(JsonOptions);
+        Assert.NotNull(registerPayload);
+        Assert.Equal("user", registerPayload.ActorType);
+        Assert.Equal("user@example.com", registerPayload.Email);
+        Assert.False(string.IsNullOrWhiteSpace(registerPayload.CsrfToken));
+        Assert.Contains(AuthCapabilities.AnalysisVote, registerPayload.Capabilities);
+
+        var meResponse = await _client.GetAsync("/api/v1/auth/me");
+        meResponse.EnsureSuccessStatusCode();
+
+        using var document = JsonDocument.Parse(await meResponse.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+
+        Assert.Equal("user", root.GetProperty("actorType").GetString());
+        Assert.Equal("Session", root.GetProperty("authScheme").GetString());
+        Assert.Equal("user@example.com", root.GetProperty("email").GetString());
+        Assert.Equal(registerPayload.CsrfToken, root.GetProperty("csrfToken").GetString());
+        Assert.Contains(AuthCapabilities.AnalysisRead, root.GetProperty("capabilities").EnumerateArray().Select(element => element.GetString()));
+    }
+
+    [Fact]
+    public async Task Login_UsesCookieSession_AndLogoutRequiresCsrf()
+    {
+        var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", new
+        {
+            email = "user2@example.com",
+            password = "strong-password"
+        });
+        var registerPayload = await registerResponse.Content.ReadFromJsonAsync<AuthSessionContract>(JsonOptions);
+        Assert.NotNull(registerPayload);
+
+        var logoutWithoutCsrf = await _client.PostAsync("/api/v1/auth/logout", content: null);
+        Assert.Equal(HttpStatusCode.BadRequest, logoutWithoutCsrf.StatusCode);
+
+        var csrfToken = registerPayload.CsrfToken;
+        Assert.False(string.IsNullOrWhiteSpace(csrfToken));
+
+        _client.DefaultRequestHeaders.Remove("X-CSRF-Token");
+        _client.DefaultRequestHeaders.Add("X-CSRF-Token", csrfToken);
+
+        var logoutWithCsrf = await _client.PostAsync("/api/v1/auth/logout", content: null);
+        Assert.Equal(HttpStatusCode.NoContent, logoutWithCsrf.StatusCode);
+
+        var meResponse = await _client.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, meResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminAccess_Returns403_ForRegularUser()
+    {
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            ApiWebApplicationFactory.CreateAccessToken(
+                subjectId: "user-123",
+                actorType: "user",
+                roles: ["member"],
+                capabilities: [AuthCapabilities.AnalysisRead]));
+
+        var response = await _client.GetAsync("/api/v1/auth/admin-access");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ServiceToken_IsIssued_AndAllowsCapabilityBoundAccess()
+    {
+        _factory.AuthStore.AddServiceClient(
+            clientId: "discord-bot",
+            clientSecret: "bot-secret",
+            isTrusted: true,
+            AuthCapabilities.AnalysisRead,
+            AuthCapabilities.AdminUsersManage);
+
+        var tokenResponse = await _client.PostAsJsonAsync("/api/v1/auth/service-token", new
+        {
+            clientId = "discord-bot",
+            clientSecret = "bot-secret"
+        });
+
+        tokenResponse.EnsureSuccessStatusCode();
+        var tokenPayload = await tokenResponse.Content.ReadFromJsonAsync<ServiceTokenContract>(JsonOptions);
+        Assert.NotNull(tokenPayload);
+        Assert.Equal("Bearer", tokenPayload.TokenType);
+        Assert.Equal("discord-bot", tokenPayload.ClientId);
+        Assert.True(tokenPayload.IsTrusted);
+        Assert.Contains(AuthCapabilities.AdminUsersManage, tokenPayload.Capabilities);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenPayload.AccessToken);
+        var response = await _client.GetAsync("/api/v1/auth/admin-access");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ServiceToken_DeniesAccess_WhenCapabilityIsMissing()
+    {
+        _factory.AuthStore.AddServiceClient(
+            clientId: "dataset-worker",
+            clientSecret: "worker-secret",
+            isTrusted: false,
+            AuthCapabilities.AnalysisRead);
+
+        var tokenResponse = await _client.PostAsJsonAsync("/api/v1/auth/service-token", new
+        {
+            clientId = "dataset-worker",
+            clientSecret = "worker-secret"
+        });
+
+        tokenResponse.EnsureSuccessStatusCode();
+        var tokenPayload = await tokenResponse.Content.ReadFromJsonAsync<ServiceTokenContract>(JsonOptions);
+        Assert.NotNull(tokenPayload);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenPayload.AccessToken);
+        var response = await _client.GetAsync("/api/v1/auth/admin-access");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task VoteText_WithAuthenticatedSession_UsesUserActor()
+    {
+        var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", new
+        {
+            email = "vote-user@example.com",
+            password = "strong-password"
+        });
+        registerResponse.EnsureSuccessStatusCode();
+
+        var textId = Guid.NewGuid();
+        var response = await _client.PostAsJsonAsync($"/api/v1/toxicity/texts/{textId}/vote", new
+        {
+            vote = "nonToxic"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var sessionPayload = await registerResponse.Content.ReadFromJsonAsync<AuthSessionContract>(JsonOptions);
+        Assert.NotNull(sessionPayload);
+        _client.DefaultRequestHeaders.Remove("X-CSRF-Token");
+        _client.DefaultRequestHeaders.Add("X-CSRF-Token", sessionPayload.CsrfToken);
+
+        response = await _client.PostAsJsonAsync($"/api/v1/toxicity/texts/{textId}/vote", new
+        {
+            vote = "nonToxic"
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(ActorType.User, _factory.AnalysisTextVotingRepository.RegisteredVotes[^1].Actor.ActorType);
+        Assert.True(_factory.AnalysisTextVotingRepository.RegisteredVotes[^1].Actor.IsAuthenticated);
     }
 
     private sealed record AnalyzeTextResponseContract(
@@ -495,6 +736,23 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         string Title,
         string? Detail,
         IReadOnlyList<ValidationErrorContract> Errors);
+
+    private sealed record AuthSessionContract(
+        string ActorType,
+        string Email,
+        string? Username,
+        string CsrfToken,
+        DateTimeOffset ExpiresAt,
+        string[] Capabilities);
+
+    private sealed record ServiceTokenContract(
+        string TokenType,
+        string AccessToken,
+        DateTimeOffset ExpiresAt,
+        string SubjectId,
+        string ClientId,
+        bool IsTrusted,
+        string[] Capabilities);
 
     private sealed record ValidationErrorContract(string Field, string Message);
 }

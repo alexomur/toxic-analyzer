@@ -26,7 +26,7 @@ public sealed class AnalyzeTextHandlerTests
         Assert.Null(result.Explanation);
         Assert.Equal(fixture.Clock.UtcNow, result.CreatedAt);
         Assert.Single(fixture.AnalysisCaptureScheduler.CapturedAnalyses);
-        Assert.Equal("You are awful", fixture.AnalysisCaptureScheduler.CapturedAnalyses[0].Text.Original);
+        Assert.Equal("You are awful", fixture.AnalysisCaptureScheduler.CapturedAnalyses[0].Analysis.Text.Original);
     }
 
     [Fact]

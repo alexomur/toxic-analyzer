@@ -6,5 +6,5 @@ public interface IAnalysisTextVotingRepository
 
     Task<AnalysisTextVotingDetails?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
-    Task<bool> RegisterVoteAsync(Guid id, AnalysisTextVoteKind vote, CancellationToken cancellationToken);
+    Task<bool> RegisterVoteAsync(Guid id, AnalysisTextVoteKind vote, CurrentActor actor, CancellationToken cancellationToken);
 }

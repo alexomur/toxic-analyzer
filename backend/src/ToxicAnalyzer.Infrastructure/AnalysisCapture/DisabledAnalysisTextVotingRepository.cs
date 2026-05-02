@@ -17,7 +17,7 @@ public sealed class DisabledAnalysisTextVotingRepository : IAnalysisTextVotingRe
             "Analysis text voting is unavailable because AnalysisCapture is disabled.");
     }
 
-    public Task<bool> RegisterVoteAsync(Guid id, AnalysisTextVoteKind vote, CancellationToken cancellationToken)
+    public Task<bool> RegisterVoteAsync(Guid id, AnalysisTextVoteKind vote, CurrentActor actor, CancellationToken cancellationToken)
     {
         throw new ToxicAnalyzer.Application.Common.ApplicationException(
             "Analysis text voting is unavailable because AnalysisCapture is disabled.");

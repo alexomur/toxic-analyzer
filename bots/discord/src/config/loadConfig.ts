@@ -15,6 +15,9 @@ export async function loadConfig(): Promise<BotConfig> {
 
   return validateConfig({
     discordToken: env.DISCORD_TOKEN,
+    backendAuthToken: env.BACKEND_AUTH_TOKEN,
+    backendServiceClientId: env.BACKEND_SERVICE_CLIENT_ID,
+    backendServiceClientSecret: env.BACKEND_SERVICE_CLIENT_SECRET,
     logLevel: env.LOG_LEVEL,
     ...fileConfig
   });
