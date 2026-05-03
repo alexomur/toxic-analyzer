@@ -7,6 +7,8 @@ namespace ToxicAnalyzer.Infrastructure.AnalysisCapture;
 
 public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTextVotingRepository
 {
+    private const string RandomPoolOrigin = "random_pool";
+
     private readonly AnalysisCaptureOptions _options;
     private readonly ILogger<PostgresAnalysisTextStore> _logger;
     private readonly string _normalizedConnectionString;
@@ -62,6 +64,40 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
         }
 
         await batch.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<Guid?> EnsureVoteableTextAsync(
+        Domain.Analysis.ToxicityAnalysis analysis,
+        AnalysisTextOrigin origin,
+        CurrentActor actor,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(analysis);
+        ArgumentNullException.ThrowIfNull(actor);
+
+        await using var connection = new NpgsqlConnection(_normalizedConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await EnsureSchemaReadyAsync(connection, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = BuildEnsureVoteableTextSql(_options.Schema);
+        command.Parameters.AddWithValue("id", analysis.Id.Value);
+        command.Parameters.AddWithValue("text_fingerprint", analysis.TextFingerprint.Value);
+        command.Parameters.AddWithValue("normalized_text", analysis.Text.Normalized);
+        command.Parameters.AddWithValue("text_length", analysis.Text.Normalized.Length);
+        command.Parameters.AddWithValue("request_count", 1L);
+        command.Parameters.AddWithValue("last_label", (short)analysis.Label.Value);
+        command.Parameters.AddWithValue("last_toxic_probability", Convert.ToDouble(analysis.ToxicProbability.Value));
+        command.Parameters.AddWithValue("last_model_key", analysis.Model.ModelKey);
+        command.Parameters.AddWithValue("last_model_version", analysis.Model.ModelVersion);
+        command.Parameters.AddWithValue("origin_kind", origin.ToStorageValue());
+        command.Parameters.AddWithValue("actor_id", actor.SubjectId);
+        command.Parameters.AddWithValue("tenant_id", (object?)actor.TenantId ?? DBNull.Value);
+        command.Parameters.AddWithValue("created_at", analysis.CreatedAt);
+        command.Parameters.AddWithValue("last_seen_at", analysis.CreatedAt);
+
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result is Guid id ? id : result is string value && Guid.TryParse(value, out var parsed) ? parsed : null;
     }
 
     public async Task<AnalysisTextVotingCandidate?> GetRandomAsync(CancellationToken cancellationToken)
@@ -127,6 +163,7 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
 
         await using var command = connection.CreateCommand();
         command.CommandText = BuildRegisterVoteSql(_options.Schema);
+        command.Parameters.AddWithValue("event_id", Guid.NewGuid());
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("actor_key", actor.ActorKey);
         command.Parameters.AddWithValue("actor_type", actor.ActorType.ToString().ToLowerInvariant());
@@ -173,7 +210,7 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
 
         CREATE TABLE IF NOT EXISTS {{schema}}.analysis_texts (
             id UUID PRIMARY KEY,
-            text_fingerprint TEXT NOT NULL UNIQUE,
+            text_fingerprint TEXT NOT NULL,
             normalized_text TEXT NOT NULL,
             text_length INTEGER NOT NULL CHECK (text_length >= 0),
             request_count BIGINT NOT NULL CHECK (request_count >= 1),
@@ -188,6 +225,12 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
             created_at TIMESTAMPTZ NOT NULL,
             last_seen_at TIMESTAMPTZ NOT NULL
         );
+
+        ALTER TABLE {{schema}}.analysis_texts
+            DROP CONSTRAINT IF EXISTS analysis_texts_text_fingerprint_key;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_analysis_texts_fingerprint_source_kind
+            ON {{schema}}.analysis_texts (text_fingerprint, source_kind);
 
         CREATE TABLE IF NOT EXISTS {{schema}}.analysis_text_votes (
             text_id UUID NOT NULL REFERENCES {{schema}}.analysis_texts (id) ON DELETE CASCADE,
@@ -210,6 +253,21 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
 
         CREATE INDEX IF NOT EXISTS idx_analysis_text_votes_text_id
             ON {{schema}}.analysis_text_votes (text_id);
+
+        CREATE TABLE IF NOT EXISTS {{schema}}.analysis_text_vote_events (
+            id UUID PRIMARY KEY,
+            text_id UUID NOT NULL REFERENCES {{schema}}.analysis_texts (id) ON DELETE CASCADE,
+            actor_key TEXT NOT NULL,
+            actor_type TEXT NOT NULL,
+            actor_id TEXT NOT NULL,
+            tenant_id TEXT,
+            source_kind TEXT NOT NULL,
+            vote SMALLINT NOT NULL CHECK (vote IN (0, 1)),
+            created_at TIMESTAMPTZ NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_analysis_text_vote_events_text_id
+            ON {{schema}}.analysis_text_vote_events (text_id);
         """;
     }
 
@@ -223,12 +281,27 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
                 COUNT(*) FILTER (WHERE vote = 0) AS votes_non_toxic
             FROM {{schema}}.analysis_text_votes
             GROUP BY text_id
+            UNION ALL
+            SELECT
+                text_id,
+                COUNT(*) FILTER (WHERE vote = 1) AS votes_toxic,
+                COUNT(*) FILTER (WHERE vote = 0) AS votes_non_toxic
+            FROM {{schema}}.analysis_text_vote_events
+            GROUP BY text_id
         )
         SELECT
             text.id,
             text.normalized_text
         FROM {{schema}}.analysis_texts AS text
-        LEFT JOIN vote_totals ON vote_totals.text_id = text.id
+        LEFT JOIN (
+            SELECT
+                text_id,
+                SUM(votes_toxic) AS votes_toxic,
+                SUM(votes_non_toxic) AS votes_non_toxic
+            FROM vote_totals
+            GROUP BY text_id
+        ) AS vote_totals ON vote_totals.text_id = text.id
+        WHERE text.source_kind IN ('{{RandomPoolOrigin}}', 'anonymous', 'user', 'admin', 'service')
         ORDER BY (-LN(GREATEST(random(), 1e-12)) * (COALESCE(vote_totals.votes_toxic, 0) + COALESCE(vote_totals.votes_non_toxic, 0) + 1))
         LIMIT 1;
         """;
@@ -237,7 +310,8 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
     private static string BuildRegisterVoteSql(string schema)
     {
         return $$"""
-        INSERT INTO {{schema}}.analysis_text_votes (
+        INSERT INTO {{schema}}.analysis_text_vote_events (
+            id,
             text_id,
             actor_key,
             actor_type,
@@ -245,10 +319,10 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
             tenant_id,
             source_kind,
             vote,
-            created_at,
-            updated_at
+            created_at
         )
         SELECT
+            @event_id,
             text.id,
             @actor_key,
             @actor_type,
@@ -256,16 +330,9 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
             @tenant_id,
             @source_kind,
             @vote,
-            @created_at,
-            @updated_at
+            @created_at
         FROM {{schema}}.analysis_texts AS text
-        WHERE text.id = @id
-        ON CONFLICT (text_id, actor_key) DO UPDATE
-        SET
-            vote = EXCLUDED.vote,
-            tenant_id = EXCLUDED.tenant_id,
-            source_kind = EXCLUDED.source_kind,
-            updated_at = EXCLUDED.updated_at;
+        WHERE text.id = @id;
         """;
     }
 
@@ -279,6 +346,13 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
                 COUNT(*) FILTER (WHERE vote = 0) AS votes_non_toxic
             FROM {{schema}}.analysis_text_votes
             GROUP BY text_id
+            UNION ALL
+            SELECT
+                text_id,
+                COUNT(*) FILTER (WHERE vote = 1) AS votes_toxic,
+                COUNT(*) FILTER (WHERE vote = 0) AS votes_non_toxic
+            FROM {{schema}}.analysis_text_vote_events
+            GROUP BY text_id
         )
         SELECT
             text.id,
@@ -289,13 +363,91 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
             text.last_toxic_probability,
             text.last_model_key,
             text.last_model_version,
-            COALESCE(vote_totals.votes_toxic, 0) AS votes_toxic,
-            COALESCE(vote_totals.votes_non_toxic, 0) AS votes_non_toxic,
+            COALESCE(SUM(vote_totals.votes_toxic), 0) AS votes_toxic,
+            COALESCE(SUM(vote_totals.votes_non_toxic), 0) AS votes_non_toxic,
             text.created_at,
             text.last_seen_at
         FROM {{schema}}.analysis_texts AS text
         LEFT JOIN vote_totals ON vote_totals.text_id = text.id
-        WHERE text.id = @id;
+        WHERE text.id = @id
+        GROUP BY
+            text.id,
+            text.normalized_text,
+            text.text_length,
+            text.request_count,
+            text.last_label,
+            text.last_toxic_probability,
+            text.last_model_key,
+            text.last_model_version,
+            text.created_at,
+            text.last_seen_at;
+        """;
+    }
+
+    private static string BuildEnsureVoteableTextSql(string schema)
+    {
+        return $$"""
+        INSERT INTO {{schema}}.analysis_texts (
+            id,
+            text_fingerprint,
+            normalized_text,
+            text_length,
+            request_count,
+            last_label,
+            last_toxic_probability,
+            last_model_key,
+            last_model_version,
+            source_kind,
+            actor_id,
+            tenant_id,
+            created_at,
+            last_seen_at
+        )
+        VALUES (
+            @id,
+            @text_fingerprint,
+            @normalized_text,
+            @text_length,
+            @request_count,
+            @last_label,
+            @last_toxic_probability,
+            @last_model_key,
+            @last_model_version,
+            @origin_kind,
+            @actor_id,
+            @tenant_id,
+            @created_at,
+            @last_seen_at
+        )
+        ON CONFLICT (text_fingerprint, source_kind) DO UPDATE
+        SET
+            request_count = {{schema}}.analysis_texts.request_count + EXCLUDED.request_count,
+            last_label = CASE
+                WHEN EXCLUDED.last_seen_at >= {{schema}}.analysis_texts.last_seen_at THEN EXCLUDED.last_label
+                ELSE {{schema}}.analysis_texts.last_label
+            END,
+            last_toxic_probability = CASE
+                WHEN EXCLUDED.last_seen_at >= {{schema}}.analysis_texts.last_seen_at THEN EXCLUDED.last_toxic_probability
+                ELSE {{schema}}.analysis_texts.last_toxic_probability
+            END,
+            last_model_key = CASE
+                WHEN EXCLUDED.last_seen_at >= {{schema}}.analysis_texts.last_seen_at THEN EXCLUDED.last_model_key
+                ELSE {{schema}}.analysis_texts.last_model_key
+            END,
+            last_model_version = CASE
+                WHEN EXCLUDED.last_seen_at >= {{schema}}.analysis_texts.last_seen_at THEN EXCLUDED.last_model_version
+                ELSE {{schema}}.analysis_texts.last_model_version
+            END,
+            actor_id = CASE
+                WHEN EXCLUDED.last_seen_at >= {{schema}}.analysis_texts.last_seen_at THEN EXCLUDED.actor_id
+                ELSE {{schema}}.analysis_texts.actor_id
+            END,
+            tenant_id = CASE
+                WHEN EXCLUDED.last_seen_at >= {{schema}}.analysis_texts.last_seen_at THEN EXCLUDED.tenant_id
+                ELSE {{schema}}.analysis_texts.tenant_id
+            END,
+            last_seen_at = GREATEST({{schema}}.analysis_texts.last_seen_at, EXCLUDED.last_seen_at)
+        RETURNING id;
         """;
     }
 
@@ -334,7 +486,7 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
             @created_at,
             @last_seen_at
         )
-        ON CONFLICT (text_fingerprint) DO UPDATE
+        ON CONFLICT (text_fingerprint, source_kind) DO UPDATE
         SET
             request_count = {{schema}}.analysis_texts.request_count + EXCLUDED.request_count,
             last_label = CASE

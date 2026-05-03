@@ -23,7 +23,7 @@ internal sealed class TestFixture
         Clock = clock;
         AnalysisTextVotingRepository = analysisTextVotingRepository;
         CurrentActorAccessor = currentActorAccessor;
-        AnalyzeTextHandler = new AnalyzeTextHandler(modelClient, analysisCaptureScheduler, currentActorAccessor, clock);
+        AnalyzeTextHandler = new AnalyzeTextHandler(modelClient, analysisTextVotingRepository, currentActorAccessor, clock);
         AnalyzeBatchHandler = new AnalyzeBatchHandler(modelClient, analysisCaptureScheduler, currentActorAccessor, clock);
         GetRandomTextHandler = new GetRandomTextHandler(analysisTextVotingRepository);
         GetTextByIdHandler = new GetTextByIdHandler(analysisTextVotingRepository);
@@ -69,7 +69,21 @@ internal sealed class FakeAnalysisTextVotingRepository : IAnalysisTextVotingRepo
 
     public bool RegisterVoteResult { get; set; } = true;
 
+    public Guid? EnsuredVoteableTextId { get; set; } = Guid.NewGuid();
+
     public List<(Guid Id, AnalysisTextVoteKind Vote, CurrentActor Actor)> RegisteredVotes { get; } = [];
+
+    public List<(ToxicityAnalysis Analysis, AnalysisTextOrigin Origin, CurrentActor Actor)> EnsuredVoteableTexts { get; } = [];
+
+    public Task<Guid?> EnsureVoteableTextAsync(
+        ToxicityAnalysis analysis,
+        AnalysisTextOrigin origin,
+        CurrentActor actor,
+        CancellationToken cancellationToken)
+    {
+        EnsuredVoteableTexts.Add((analysis, origin, actor));
+        return Task.FromResult(EnsuredVoteableTextId);
+    }
 
     public Task<AnalysisTextVotingCandidate?> GetRandomAsync(CancellationToken cancellationToken)
     {

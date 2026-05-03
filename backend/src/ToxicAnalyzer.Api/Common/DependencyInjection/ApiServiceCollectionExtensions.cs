@@ -10,6 +10,7 @@ using ToxicAnalyzer.Application.Toxicity.GetRandomText;
 using ToxicAnalyzer.Application.Toxicity.GetTextById;
 using ToxicAnalyzer.Application.Toxicity.VoteText;
 using ToxicAnalyzer.Api.Common.Auth;
+using ToxicAnalyzer.Api.Common.Frontend;
 using ToxicAnalyzer.Api.Common.OpenApi;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
@@ -26,9 +27,25 @@ public static class ApiServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         var authOptions = configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>() ?? new AuthOptions();
+        var frontendOptions = configuration.GetSection(FrontendOptions.SectionName).Get<FrontendOptions>() ?? new FrontendOptions();
 
         services.AddHttpContextAccessor();
         services.AddDataProtection();
+        services.AddSingleton(frontendOptions);
+        services.AddCors(options =>
+        {
+            options.AddPolicy("Frontend", policy =>
+            {
+                if (frontendOptions.HasAllowedOrigins)
+                {
+                    policy
+                        .WithOrigins(frontendOptions.AllowedOrigins)
+                        .AllowAnyHeader()
+                        .AllowAnyMethod()
+                        .AllowCredentials();
+                }
+            });
+        });
         services.AddSingleton<IAnonymousActorCookieService, AnonymousActorCookieService>();
         services.AddSingleton<ISessionCookieService, SessionCookieService>();
         services.AddScoped<ICurrentActorAccessor, HttpContextCurrentActorAccessor>();

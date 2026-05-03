@@ -5,6 +5,15 @@ namespace ToxicAnalyzer.Infrastructure.AnalysisCapture;
 
 public sealed class DisabledAnalysisTextVotingRepository : IAnalysisTextVotingRepository
 {
+    public Task<Guid?> EnsureVoteableTextAsync(
+        Domain.Analysis.ToxicityAnalysis analysis,
+        AnalysisTextOrigin origin,
+        CurrentActor actor,
+        CancellationToken cancellationToken)
+    {
+        return Task.FromResult<Guid?>(null);
+    }
+
     public Task<AnalysisTextVotingCandidate?> GetRandomAsync(CancellationToken cancellationToken)
     {
         throw new ToxicAnalyzer.Application.Common.ApplicationException(

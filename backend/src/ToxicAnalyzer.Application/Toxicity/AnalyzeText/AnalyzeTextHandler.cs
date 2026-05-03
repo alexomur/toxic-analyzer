@@ -7,18 +7,18 @@ namespace ToxicAnalyzer.Application.Toxicity.AnalyzeText;
 public sealed class AnalyzeTextHandler
 {
     private readonly IModelPredictionClient _modelPredictionClient;
-    private readonly IAnalysisCaptureScheduler _analysisCaptureScheduler;
+    private readonly IAnalysisTextVotingRepository _analysisTextVotingRepository;
     private readonly ICurrentActorAccessor _currentActorAccessor;
     private readonly IClock _clock;
 
     public AnalyzeTextHandler(
         IModelPredictionClient modelPredictionClient,
-        IAnalysisCaptureScheduler analysisCaptureScheduler,
+        IAnalysisTextVotingRepository analysisTextVotingRepository,
         ICurrentActorAccessor currentActorAccessor,
         IClock clock)
     {
         _modelPredictionClient = modelPredictionClient;
-        _analysisCaptureScheduler = analysisCaptureScheduler;
+        _analysisTextVotingRepository = analysisTextVotingRepository;
         _currentActorAccessor = currentActorAccessor;
         _clock = clock;
     }
@@ -34,10 +34,15 @@ public sealed class AnalyzeTextHandler
         var (prediction, explanation) = await PredictAsync(text, reportLevel, cancellationToken);
         var analysis = ToxicityMappings.ToAnalysis(text, prediction, _clock.UtcNow);
         var actor = _currentActorAccessor.GetCurrent();
-        _analysisCaptureScheduler.Schedule(analysis, actor);
+        var textId = await _analysisTextVotingRepository.EnsureVoteableTextAsync(
+            analysis,
+            AnalysisTextOrigin.SelfSubmitted,
+            actor,
+            cancellationToken);
 
         return new AnalyzeTextResult(
             analysis.Id.ToString(),
+            textId?.ToString(),
             analysis.Label.Value,
             analysis.ToxicProbability.Value,
             ToxicityMappings.ToModelDescriptor(analysis.Model),

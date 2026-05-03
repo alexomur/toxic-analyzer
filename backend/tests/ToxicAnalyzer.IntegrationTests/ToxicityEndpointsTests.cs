@@ -25,6 +25,17 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         _client = factory.CreateClient();
     }
 
+    private void AuthenticateAsMember(params string[] capabilities)
+    {
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            ApiWebApplicationFactory.CreateAccessToken(
+                subjectId: "user-123",
+                actorType: "user",
+                roles: ["member"],
+                capabilities: capabilities));
+    }
+
     [Fact]
     public async Task Analyze_IsAccessible_WithoutAuthentication()
     {
@@ -53,6 +64,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
 
         Assert.NotNull(payload);
         Assert.False(string.IsNullOrWhiteSpace(payload.AnalysisId));
+        Assert.Equal(_factory.AnalysisTextVotingRepository.EnsuredVoteableTextId?.ToString(), payload.TextId);
         Assert.Equal(1, payload.Label);
         Assert.Equal(0.91m, payload.ToxicProbability);
         Assert.Equal("baseline", payload.Model.ModelKey);
@@ -85,8 +97,9 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         Assert.Null(payload.Explanation);
         Assert.Equal(1, _factory.ModelPredictionClient.PredictAsyncCallCount);
         Assert.Equal(0, _factory.ModelPredictionClient.PredictWithExplanationAsyncCallCount);
-        Assert.Single(_factory.AnalysisCaptureScheduler.CapturedAnalyses);
-        Assert.Equal(ActorType.Anonymous, _factory.AnalysisCaptureScheduler.CapturedAnalyses[0].Actor.ActorType);
+        Assert.Single(_factory.AnalysisTextVotingRepository.EnsuredVoteableTexts);
+        Assert.Equal(AnalysisTextOrigin.SelfSubmitted, _factory.AnalysisTextVotingRepository.EnsuredVoteableTexts[0].Origin);
+        Assert.Equal(ActorType.Anonymous, _factory.AnalysisTextVotingRepository.EnsuredVoteableTexts[0].Actor.ActorType);
     }
 
     [Fact]
@@ -138,7 +151,21 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     }
 
     [Fact]
-    public async Task AnalyzeBatch_ReturnsSuccessfulResponse()
+    public async Task AnalyzeBatch_Returns401_WithoutAuthentication()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze-batch", new
+        {
+            items = new object[]
+            {
+                new { clientItemId = "a-1", text = "first" }
+            }
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AnalyzeBatch_ReturnsSuccessfulResponse_ForAuthenticatedUser()
     {
         _factory.ModelPredictionClient.Reset();
         _factory.ModelPredictionClient.BatchPredictions =
@@ -146,6 +173,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
             FakeModelPredictionClient.CreatePrediction(0, 0.12m),
             FakeModelPredictionClient.CreatePrediction(1, 0.88m)
         ];
+        AuthenticateAsMember(AuthCapabilities.AnalysisRead);
 
         var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze-batch", new
         {
@@ -169,7 +197,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         Assert.Equal(0.50m, payload.Summary.AverageToxicProbability);
         Assert.Equal(_factory.Clock.UtcNow, payload.CreatedAt);
         Assert.Equal(2, _factory.AnalysisCaptureScheduler.CapturedAnalyses.Count);
-        Assert.All(_factory.AnalysisCaptureScheduler.CapturedAnalyses, captured => Assert.Equal(ActorType.Anonymous, captured.Actor.ActorType));
+        Assert.All(_factory.AnalysisCaptureScheduler.CapturedAnalyses, captured => Assert.Equal(ActorType.User, captured.Actor.ActorType));
     }
 
     [Fact]
@@ -181,6 +209,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
             FakeModelPredictionClient.CreatePrediction(1, 0.90m),
             FakeModelPredictionClient.CreatePrediction(0, 0.10m)
         ];
+        AuthenticateAsMember(AuthCapabilities.AnalysisRead);
 
         var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze-batch", new
         {
@@ -212,6 +241,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
             FakeModelPredictionClient.CreatePrediction(0, 0.22m),
             FakeModelPredictionClient.CreatePrediction(0, 0.33m)
         ];
+        AuthenticateAsMember(AuthCapabilities.AnalysisRead);
 
         var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze-batch", new
         {
@@ -234,6 +264,8 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     [Fact]
     public async Task AnalyzeBatch_Returns400_ForEmptyBatch()
     {
+        AuthenticateAsMember(AuthCapabilities.AnalysisRead);
+
         var response = await _client.PostAsJsonAsync("/api/v1/toxicity/analyze-batch", new
         {
             items = Array.Empty<object>()
@@ -317,10 +349,19 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     }
 
     [Fact]
+    public async Task GetRandomText_Returns401_WithoutAuthentication()
+    {
+        var response = await _client.GetAsync("/api/v1/toxicity/texts/random");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task GetRandomText_ReturnsCandidate()
     {
         var textId = Guid.NewGuid();
         _factory.AnalysisTextVotingRepository.RandomCandidate = new AnalysisTextVotingCandidate(textId, "stored text");
+        AuthenticateAsMember(AuthCapabilities.AnalysisVote);
 
         var response = await _client.GetAsync("/api/v1/toxicity/texts/random");
 
@@ -336,6 +377,8 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     [Fact]
     public async Task GetRandomText_Returns404_WhenNoTextsAvailable()
     {
+        AuthenticateAsMember(AuthCapabilities.AnalysisVote);
+
         var response = await _client.GetAsync("/api/v1/toxicity/texts/random");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -364,6 +407,8 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
             new DateTimeOffset(2026, 5, 2, 9, 0, 0, TimeSpan.Zero),
             new DateTimeOffset(2026, 5, 2, 10, 0, 0, TimeSpan.Zero));
 
+        AuthenticateAsMember(AuthCapabilities.AnalysisRead);
+
         var response = await _client.GetAsync($"/api/v1/toxicity/texts/{textId}");
 
         response.EnsureSuccessStatusCode();
@@ -388,6 +433,8 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     {
         var textId = Guid.NewGuid();
 
+        AuthenticateAsMember(AuthCapabilities.AnalysisRead);
+
         var response = await _client.GetAsync($"/api/v1/toxicity/texts/{textId}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -399,9 +446,31 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     }
 
     [Fact]
+    public async Task GetTextById_Returns401_WithoutAuthentication()
+    {
+        var response = await _client.GetAsync($"/api/v1/toxicity/texts/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task VoteText_Returns401_WithoutAuthentication()
+    {
+        var textId = Guid.NewGuid();
+
+        var response = await _client.PostAsJsonAsync($"/api/v1/toxicity/texts/{textId}/vote", new
+        {
+            vote = "toxic"
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task VoteText_Returns204_ForToxicVote()
     {
         var textId = Guid.NewGuid();
+        AuthenticateAsMember(AuthCapabilities.AnalysisVote);
 
         var response = await _client.PostAsJsonAsync($"/api/v1/toxicity/texts/{textId}/vote", new
         {
@@ -412,13 +481,14 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
         Assert.Single(_factory.AnalysisTextVotingRepository.RegisteredVotes);
         Assert.Equal(textId, _factory.AnalysisTextVotingRepository.RegisteredVotes[0].Id);
         Assert.Equal(AnalysisTextVoteKind.Toxic, _factory.AnalysisTextVotingRepository.RegisteredVotes[0].Vote);
-        Assert.Equal(ActorType.Anonymous, _factory.AnalysisTextVotingRepository.RegisteredVotes[0].Actor.ActorType);
+        Assert.Equal(ActorType.User, _factory.AnalysisTextVotingRepository.RegisteredVotes[0].Actor.ActorType);
     }
 
     [Fact]
     public async Task VoteText_Returns400_ForInvalidVote()
     {
         var textId = Guid.NewGuid();
+        AuthenticateAsMember(AuthCapabilities.AnalysisVote);
 
         var response = await _client.PostAsJsonAsync($"/api/v1/toxicity/texts/{textId}/vote", new
         {
@@ -438,6 +508,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
     {
         var textId = Guid.NewGuid();
         _factory.AnalysisTextVotingRepository.RegisterVoteResult = false;
+        AuthenticateAsMember(AuthCapabilities.AnalysisVote);
 
         var response = await _client.PostAsJsonAsync($"/api/v1/toxicity/texts/{textId}/vote", new
         {
@@ -473,10 +544,11 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
 
         response.EnsureSuccessStatusCode();
 
-        Assert.Single(_factory.AnalysisCaptureScheduler.CapturedAnalyses);
-        Assert.Equal(ActorType.Service, _factory.AnalysisCaptureScheduler.CapturedAnalyses[0].Actor.ActorType);
-        Assert.Equal("discord-bot-1", _factory.AnalysisCaptureScheduler.CapturedAnalyses[0].Actor.SubjectId);
-        Assert.Equal("discord-bot", _factory.AnalysisCaptureScheduler.CapturedAnalyses[0].Actor.ClientId);
+        Assert.Single(_factory.AnalysisTextVotingRepository.EnsuredVoteableTexts);
+        Assert.Equal(AnalysisTextOrigin.SelfSubmitted, _factory.AnalysisTextVotingRepository.EnsuredVoteableTexts[0].Origin);
+        Assert.Equal(ActorType.Service, _factory.AnalysisTextVotingRepository.EnsuredVoteableTexts[0].Actor.ActorType);
+        Assert.Equal("discord-bot-1", _factory.AnalysisTextVotingRepository.EnsuredVoteableTexts[0].Actor.SubjectId);
+        Assert.Equal("discord-bot", _factory.AnalysisTextVotingRepository.EnsuredVoteableTexts[0].Actor.ClientId);
     }
 
     [Fact]
@@ -677,6 +749,7 @@ public sealed class ToxicityEndpointsTests : IClassFixture<ApiWebApplicationFact
 
     private sealed record AnalyzeTextResponseContract(
         string AnalysisId,
+        string? TextId,
         int Label,
         decimal ToxicProbability,
         ModelInfoContract Model,

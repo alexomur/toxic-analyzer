@@ -10,6 +10,7 @@
 - Public API contract: `backend/API_CONTRACTS.md`
 - Internal dependency: Python `model` service over HTTP
 - Current runtime model: request processing with optional asynchronous PostgreSQL capture
+- Next required refactor: frontend-ready auth, voteable-text semantics, and deploy-ready browser integration
 
 ## Solution Layout
 
@@ -25,10 +26,10 @@
 The backend currently exposes these public endpoints:
 
 - `POST /api/v1/toxicity/analyze`
-- `POST /api/v1/toxicity/analyze-batch`
-- `GET /api/v1/toxicity/texts/random`
+- `POST /api/v1/toxicity/analyze-batch` - requires authentication
+- `GET /api/v1/toxicity/texts/random` - requires authentication
 - `GET /api/v1/toxicity/texts/{textId}` - stored text, vote counters, and last model snapshot
-- `POST /api/v1/toxicity/texts/{textId}/vote`
+- `POST /api/v1/toxicity/texts/{textId}/vote` - requires authentication
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/service-token`
@@ -55,14 +56,17 @@ Single-text analysis:
 - defaults `reportLevel` to `summary`
 - calls `model` endpoint `v1/predict` for `summary`
 - calls `model` endpoint `v1/predict/explain` for `full`
+- frontend MVP should always call this flow with `reportLevel=full`
 
 Batch analysis:
 
+- requires authentication
 - requires non-empty `items`
 - preserves input order in the response
 - echoes `clientItemId` unchanged
 - enforces maximum batch size `100`
 - calls `model` endpoint `v1/predict/batch`
+- frontend MVP should render charts and derived analytics client-side from this response
 
 Current non-goals in the backend implementation:
 
@@ -80,9 +84,36 @@ The current storage model intentionally keeps only one row per normalized text i
 - latest model snapshot: `last_label`, `last_toxic_probability`, `last_model_key`, `last_model_version`
 - timestamps: `created_at`, `last_seen_at`
 
-Anonymous voting uses the same table. Random text retrieval prefers rows with fewer total votes through weighted random ordering, while still allowing heavily voted texts to reappear sometimes.
+Authenticated voting uses the same table. Random text retrieval prefers rows with fewer total votes through weighted random ordering, while still allowing heavily voted texts to reappear sometimes.
 
 This keeps the database compact and avoids coupling HTTP latency to PostgreSQL writes. Queue overflow or transient database failures can drop capture messages; the public inference response is not blocked by capture.
+
+## Frontend Integration Decisions
+
+- browser users use cookie-session auth with CSRF protection
+- self-registration is part of MVP
+- batch analysis and text-labeling flows require authentication both in the browser UI and at the API layer
+- `GET /api/v1/toxicity/texts/{textId}` should be treated as authenticated product data
+- single-text analysis is an explainability flow
+- batch analysis is a client-side analytics flow
+- user-facing history is out of scope for MVP
+
+## Voteable Text Direction
+
+Before substantive frontend work, the backend should move from a generic captured-text model to a voteable-text model with explicit origin semantics.
+
+Near-term origin categories:
+
+- `random_pool`
+- `self_submitted`
+- `bot_submitted`
+
+The intended direction is:
+
+- keep voting centered on backend-issued `textId`
+- allow voting both for random texts and for a user's own analyzed text
+- keep future bot flows on the same backend contract
+- treat repeated votes as allowed feedback events in MVP instead of enforcing uniqueness now
 
 ## Error Handling
 
@@ -115,6 +146,7 @@ Primary settings live in `backend/src/ToxicAnalyzer.Api/appsettings.json`.
 - `Auth:BrowserSessionLifetime` defaults to `7` days
 - `Auth:ServiceAccessTokenLifetime` defaults to `15` minutes
 - `Auth:BootstrapAdminEmail` and `Auth:BootstrapAdminPassword` are development-only bootstrap credentials
+- frontend deployment should also introduce explicit allowed-origin configuration for browser clients when the UI is served from a different origin
 
 For local `dotnet run`, launch profiles are defined in `backend/src/ToxicAnalyzer.Api/Properties/launchSettings.json`.
 
@@ -159,6 +191,12 @@ The backend now uses a split auth model:
 - browser/frontend users authenticate with HttpOnly cookie sessions and CSRF protection
 - bots and services authenticate with client credentials and receive short-lived bearer JWT access tokens from the backend
 - authorization is capability-based, with the current foundation including `analysis.read`, `analysis.vote`, `model.reload`, `model.retrain`, `dataset.update`, and `admin.users.manage`
+
+Near-term expectation:
+
+- frontend should primarily use the browser-session flow
+- bot integrations should continue to use service-token flow
+- backend deployment should remain compatible with both same-origin and cross-origin frontend hosting
 
 Layering is intentionally separated:
 

@@ -4,6 +4,7 @@ namespace ToxicAnalyzer.Api.Contracts.Toxicity;
 
 public sealed record AnalyzeTextResponse(
     string AnalysisId,
+    string? TextId,
     int Label,
     decimal ToxicProbability,
     ModelInfoResponse Model,

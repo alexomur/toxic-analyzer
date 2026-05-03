@@ -4,6 +4,7 @@ using ToxicAnalyzer.Application.Toxicity.AnalyzeText;
 using ToxicAnalyzer.Application.Toxicity.GetRandomText;
 using ToxicAnalyzer.Application.Toxicity.GetTextById;
 using ToxicAnalyzer.Application.Toxicity.VoteText;
+using ToxicAnalyzer.Api.Common.Auth;
 
 namespace ToxicAnalyzer.Api.Endpoints;
 
@@ -27,7 +28,9 @@ public static class ToxicityEndpoints
         group.MapPost("/analyze-batch", AnalyzeBatchAsync)
             .WithName("AnalyzeTextBatch")
             .WithSummary("Analyze a batch of texts for toxicity.")
+            .RequireAuthorization(AuthPolicies.RequireAuthenticated)
             .Produces<AnalyzeBatchResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .ProducesProblem(StatusCodes.Status504GatewayTimeout)
@@ -35,22 +38,28 @@ public static class ToxicityEndpoints
 
         group.MapGet("/texts/random", GetRandomTextAsync)
             .WithName("GetRandomAnalysisText")
-            .WithSummary("Get a random text for anonymous toxicity voting.")
+            .WithSummary("Get a random text for authenticated toxicity voting.")
+            .RequireAuthorization(AuthPolicies.RequireAuthenticated)
             .Produces<GetRandomTextResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
         group.MapGet("/texts/{textId:guid}", GetTextByIdAsync)
             .WithName("GetAnalysisTextById")
             .WithSummary("Get stored voting information for a text by id.")
+            .RequireAuthorization(AuthPolicies.RequireAuthenticated)
             .Produces<GetTextByIdResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
         group.MapPost("/texts/{textId:guid}/vote", VoteTextAsync)
             .WithName("VoteAnalysisText")
-            .WithSummary("Submit an anonymous toxicity vote for a stored text.")
+            .WithSummary("Submit an authenticated toxicity vote for a stored text.")
+            .RequireAuthorization(AuthPolicies.RequireAuthenticated)
             .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status500InternalServerError);

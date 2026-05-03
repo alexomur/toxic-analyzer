@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using ToxicAnalyzer.Api.Common.Auth;
 using ToxicAnalyzer.Api.Common.DependencyInjection;
 using ToxicAnalyzer.Api.Common.ErrorHandling;
+using ToxicAnalyzer.Api.Common.Frontend;
 using ToxicAnalyzer.Api.Endpoints;
 using ToxicAnalyzer.Infrastructure;
 using ToxicAnalyzer.Infrastructure.ModelService;
@@ -23,6 +24,11 @@ builder.Services
 var app = builder.Build();
 
 app.UseExceptionHandler();
+var frontendOptions = app.Services.GetRequiredService<FrontendOptions>();
+if (frontendOptions.HasAllowedOrigins)
+{
+    app.UseCors("Frontend");
+}
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<CsrfProtectionMiddleware>();

@@ -105,14 +105,30 @@ public sealed class FakeAnalysisTextVotingRepository : IAnalysisTextVotingReposi
 
     public bool RegisterVoteResult { get; set; } = true;
 
+    public Guid? EnsuredVoteableTextId { get; set; } = Guid.NewGuid();
+
     public List<(Guid Id, AnalysisTextVoteKind Vote, CurrentActor Actor)> RegisteredVotes { get; } = [];
+
+    public List<(ToxicityAnalysis Analysis, AnalysisTextOrigin Origin, CurrentActor Actor)> EnsuredVoteableTexts { get; } = [];
 
     public void Reset()
     {
         RandomCandidate = null;
         Details = null;
         RegisterVoteResult = true;
+        EnsuredVoteableTextId = Guid.NewGuid();
         RegisteredVotes.Clear();
+        EnsuredVoteableTexts.Clear();
+    }
+
+    public Task<Guid?> EnsureVoteableTextAsync(
+        ToxicityAnalysis analysis,
+        AnalysisTextOrigin origin,
+        CurrentActor actor,
+        CancellationToken cancellationToken)
+    {
+        EnsuredVoteableTexts.Add((analysis, origin, actor));
+        return Task.FromResult(EnsuredVoteableTextId);
     }
 
     public Task<AnalysisTextVotingCandidate?> GetRandomAsync(CancellationToken cancellationToken)

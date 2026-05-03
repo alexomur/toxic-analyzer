@@ -12,6 +12,7 @@ internal static class ToxicityContractMappings
     {
         return new AnalyzeTextResponse(
             result.AnalysisId,
+            result.TextId,
             result.Label,
             result.ToxicProbability,
             ToModelResponse(result.Model),

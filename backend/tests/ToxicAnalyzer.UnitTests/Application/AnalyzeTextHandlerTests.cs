@@ -18,6 +18,7 @@ public sealed class AnalyzeTextHandlerTests
             CancellationToken.None);
 
         Assert.False(string.IsNullOrWhiteSpace(result.AnalysisId));
+        Assert.Equal(fixture.AnalysisTextVotingRepository.EnsuredVoteableTextId?.ToString(), result.TextId);
         Assert.Equal(1, result.Label);
         Assert.Equal(0.91m, result.ToxicProbability);
         Assert.Equal("baseline-a", result.Model.ModelKey);
@@ -25,8 +26,9 @@ public sealed class AnalyzeTextHandlerTests
         Assert.Equal(AnalyzeTextReportLevel.Summary, result.ReportLevel);
         Assert.Null(result.Explanation);
         Assert.Equal(fixture.Clock.UtcNow, result.CreatedAt);
-        Assert.Single(fixture.AnalysisCaptureScheduler.CapturedAnalyses);
-        Assert.Equal("You are awful", fixture.AnalysisCaptureScheduler.CapturedAnalyses[0].Analysis.Text.Original);
+        Assert.Single(fixture.AnalysisTextVotingRepository.EnsuredVoteableTexts);
+        Assert.Equal(AnalysisTextOrigin.SelfSubmitted, fixture.AnalysisTextVotingRepository.EnsuredVoteableTexts[0].Origin);
+        Assert.Equal("You are awful", fixture.AnalysisTextVotingRepository.EnsuredVoteableTexts[0].Analysis.Text.Original);
     }
 
     [Fact]
@@ -117,6 +119,6 @@ public sealed class AnalyzeTextHandlerTests
             new AnalyzeTextCommand("Some text"),
             CancellationToken.None));
 
-        Assert.Empty(fixture.AnalysisCaptureScheduler.CapturedAnalyses);
+        Assert.Empty(fixture.AnalysisTextVotingRepository.EnsuredVoteableTexts);
     }
 }
