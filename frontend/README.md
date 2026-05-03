@@ -1,6 +1,6 @@
 # Toxic Analyzer Frontend
 
-SPA frontend for Toxic Analyzer MVP.
+SPA frontend for Toxic Analyzer.
 
 ## Stack
 
@@ -13,7 +13,7 @@ SPA frontend for Toxic Analyzer MVP.
 - shadcn-style UI primitives
 - Recharts
 
-## Product Routes
+## Product routes
 
 - `/` - single-text check with verdict, probability, and explanation
 - `/batch` - authenticated dataset check with manual/file intake, analytics, and results table
@@ -22,7 +22,7 @@ SPA frontend for Toxic Analyzer MVP.
 - `/register` - registration form
 - `/texts/:textId` - authenticated text details
 
-## Local Run
+## Local run
 
 For a clean local bootstrap from `frontend/`, use one command:
 
@@ -48,6 +48,8 @@ Dependencies install:
 npm install
 ```
 
+## Environment
+
 The Vite dev server proxies `/api` and `/health` to `http://localhost:5068` by default, so local cookie-session auth works without cross-origin browser setup.
 
 Committed defaults live in [`.env.development`](C:/Users/Alexomur/Desktop/projects/toxic-analyzer/frontend/.env.development), so no manual env file is required for standard local development.
@@ -63,7 +65,7 @@ For a separately hosted frontend build, set `VITE_API_BASE_URL` to the backend o
 
 ## Docker Compose
 
-The repository root compose stack now includes the frontend:
+The repository root compose stack includes the frontend:
 
 ```powershell
 docker compose up --build
@@ -95,19 +97,12 @@ npm run build
 - `src/shared/ui` - reusable primitives and product-facing UI blocks
 - `src/shared/lib` - formatting, chunking, score helpers
 
-## UI Notes
-
-- The frontend uses one dark-surface visual language across pages instead of large decorative hero sections.
-- Primary screens are action-first: the main input or working content should be visible in the first viewport.
-- `IBM Plex Sans` is the main UI font for mixed Russian/English copy; `JetBrains Mono` is reserved for identifiers and technical values.
-- Teal communicates primary actions and active state; orange is reserved for warning and toxicity emphasis.
-- Empty states should stay compact and informative rather than dominate the page.
-
-## Backend Assumptions
+## Backend assumptions
 
 - Browser auth uses backend-managed HttpOnly cookies.
 - Session-authenticated write requests require `X-CSRF-Token`.
-- Single-text analysis always uses `reportLevel=full`.
+- Single-text analysis uses `reportLevel=full`.
 - Batch requests are limited to 100 items; the frontend chunks larger datasets automatically.
-- Text details come from `GET /api/v1/toxicity/texts/{textId}` and require authentication.
-- The frontend never talks directly to `model/`.
+- Text details come from `GET /api/v1/toxicity/texts/{textId}`.
+
+For endpoint details and response shapes, see [backend/API_CONTRACTS.md](C:/Users/Alexomur/Desktop/projects/toxic-analyzer/backend/API_CONTRACTS.md).

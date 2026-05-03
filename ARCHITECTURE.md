@@ -1,15 +1,10 @@
 # Architecture
 
-This document describes the current service boundaries after backend MVP completion. It remains a boundary document, not a full delivery checklist.
+`ARCHITECTURE.md` defines service boundaries and ownership across `model`, `backend`, `frontend`, and bot clients.
 
-## Current reality
+![architecture.png](resources/architecture.png)
 
-- The baseline model in `model/` is treated as ready for integration.
-- Backend MVP in `backend/` is complete and now defines the public API boundary.
-- `frontend/` remains the next stage and should integrate against backend contracts.
-- The next backend work should be driven by frontend integration needs, not by expanding `model/`.
-
-## Planned services
+## Services
 
 ### `model`
 
@@ -19,129 +14,93 @@ Responsibilities:
 
 - load local model artifacts
 - run single and batch inference
-- expose internal admin operations such as `reload` and `retrain`
+- own internal model lifecycle operations
 - own training and retraining pipelines
 
 Out of scope:
 
 - public product API
+- browser auth
+- bot auth
 - user-facing business logic
-- feedback storage as product behavior
+- voting and feedback workflows
 - frontend-facing analytics
 
 ### `backend`
 
-Current product backend and public API boundary.
+Public product backend.
 
 Responsibilities:
 
-- public API for the frontend
-- orchestration, authorization, and product logic
-- storing feedback and product data
-- calling the internal `model` service
-- assigning product-level semantics to analyzed texts, voting flows, and actor permissions
-
-Current implementation note:
-
-- the repository contains a layered ASP.NET Core backend in `backend/src/`
-- MVP endpoints are implemented in `backend/src/ToxicAnalyzer.Api`
-- backend delegates inference to `model` and asynchronously captures normalized analyzed texts into PostgreSQL for future product feedback and training workflows
+- expose the public HTTP API
+- own orchestration, authorization, and product logic
+- call the internal `model` service
+- own auth, session management, and service authentication
+- own voting, feedback, and analyzed-text product semantics
+- persist product data in PostgreSQL
 
 ### `frontend`
 
-Future user interface. It should communicate with `backend`, not directly with `model`.
+Browser client for the public backend API.
 
-Near-term frontend responsibilities:
+Responsibilities:
 
-- browser login, registration, logout, and current-session restore
-- single-text analysis with explainability
-- batch analysis with client-side charts and derived analytics
-- random-text retrieval and voting
-- authenticated text lookup by `textId`
+- call `backend`
+- render user-facing product flows
+- handle browser-side interaction and presentation logic
 
-Frontend non-goals for MVP:
+Out of scope:
 
-- direct `model` integration
-- user history screens
-- admin interfaces
+- direct calls to `model`
+- ownership of auth rules
+- ownership of voting or feedback data
+- product logic that belongs in `backend`
 
-## Frontend MVP contract decisions
+### Bots and external clients
 
-- Browser auth uses backend-managed HttpOnly cookie sessions with CSRF protection.
-- Self-registration is part of MVP and should remain simple, with room for later hardening.
-- Single-text analysis in the frontend should always request `reportLevel=full`.
-- Batch analysis in the frontend should always use the batch endpoint and render analytics client-side.
-- `GET /api/v1/toxicity/texts/{textId}` is product data and should require authentication.
-- Voting should stay unified around backend-owned `textId` resources instead of frontend-owned ad hoc text payloads.
+Bots and other external clients use the public `backend` API.
 
-## Voteable text model
+They do not call `model` directly.
 
-The project should treat voteable texts as backend-owned entities with explicit origin metadata.
+## API boundary
 
-Required origin categories for near-term backend work:
+- `backend` is the public API boundary for browser clients, bots, and other external consumers.
+- `model` is an internal service used by `backend`.
+- `frontend` and bots communicate with `backend`, not with `model`.
 
-- `random_pool`
-- `self_submitted`
-- `bot_submitted`
+## Ownership
 
-Implications:
+### Auth
 
-- random voting continues to use stored candidate texts
-- analyzing a user's own text may create or reuse a voteable text entity and return its `textId`
-- future bots should reuse the same backend text and vote model instead of introducing a parallel flow
-- repeated votes may stay allowed in MVP, but they should be modeled as feedback events, not as a unique final user state
+- `backend` owns authentication and authorization.
+- Browser auth, session handling, CSRF behavior, and service-client auth belong to `backend`.
+- `frontend` consumes auth flows exposed by `backend`.
+- `model` does not own public auth behavior.
 
-## Internal contract between `backend` and `model`
+### Voting and feedback
 
-The `model` service should stay narrow and predictable.
+- `backend` owns voteable text entities, voting flows, actor permissions, and feedback events.
+- Voteable text origins are part of the backend domain model. Implemented categories are `random_pool`, `self_submitted`, and `bot_submitted`.
+- `frontend` and bots act as clients of those backend-owned flows.
+- Voting and feedback are product concerns and do not belong in `model`.
 
-Expected runtime operations:
+### Training data and model lifecycle
 
-- `GET /health/live`
-- `GET /health/ready`
-- `GET /v1/model/info`
-- `POST /v1/predict`
-- `POST /v1/predict/explain`
-- `POST /v1/predict/batch`
-
-Expected admin operations:
-
-- `POST /v1/admin/reload`
-- `POST /v1/admin/retrain`
-- `GET /v1/admin/jobs/{job_key}`
-- `GET /v1/admin/jobs`
-
-Inference responses should expose:
-
-- binary `label`
-- `toxic_probability`
-- `model_key`
-- `model_version`
-
-The explain operation should additionally expose:
-
-- calibrated and posthoc-adjusted probabilities
-- active threshold
-- feature-level explanation details
+- `model` owns training, retraining, and model-specific runtime behavior.
+- Model weights and artifacts belong to `model`.
+- `backend` may persist product data that can later be used in training workflows, but it does not own model training logic.
 
 ## Data boundaries
 
 - Model weights stay in local artifacts under `model/`.
 - PostgreSQL is the shared store for training texts, curated candidates, feedback-derived data, model registry metadata, and retrain jobs.
 - PostgreSQL is not the storage for binary model weights.
-- Backend now persists deduplicated analyzed texts as product data in PostgreSQL; model-specific training and registry data remain separate concerns in the same database.
-- Product feedback data should remain in backend-owned tables and contracts even when it later feeds model retraining workflows.
+- Product feedback data remains in backend-owned tables and contracts even when it is later used by model retraining workflows.
+- Backend-persisted analyzed texts are product data, not a transfer of product ownership into `model`.
 
 ## Deployment boundary
 
-- The system should support both same-origin and cross-origin frontend deployment.
-- Same-origin remains the simplest local and small-server deployment model.
-- Cross-origin support should be treated as a first-class backend concern through explicit CORS configuration and stable session/CSRF behavior.
-- Frontend deployment decisions must not leak product logic or auth decisions into `model`.
-
-## Near-term direction
-
-- Build the next backend capabilities around the existing model contract instead of expanding product logic inside `model`.
-- Keep the model runtime thin and reusable from both CLI and HTTP.
-- Use the completed backend MVP contracts as the integration baseline for frontend work.
-- Complete the backend refactor needed for authenticated text lookup, voteable text origins, and deploy-ready browser integration before starting substantive frontend implementation.
+- The system supports both same-origin and cross-origin frontend deployment.
+- Same-origin is the simplest local and small-server deployment model.
+- Cross-origin support is a backend concern through explicit CORS configuration and stable session/CSRF behavior.
+- Frontend deployment decisions must not move product logic or auth decisions into `model`.

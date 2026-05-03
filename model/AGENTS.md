@@ -1,36 +1,16 @@
 # AGENTS.md
 
-## Назначение
+- Read `model/README.md` first.
+- Then inspect `model/pyproject.toml`.
+- Then inspect `model/src/`, `model/tests/`, and `model/configs/`.
 
-`model/` — единственная активная зона реализации на текущем этапе.
-Здесь разрабатывается первая baseline-модель для бинарной классификации токсичности.
+- Use `model/notebooks/` only for research tasks.
+- Do not write production code in `.ipynb`.
+- Keep training, evaluation, and inference logic in Python modules under `model/src/`.
+- Do not add `backend`, public API, or service-contract work to `model/` tasks unless the task explicitly requires it.
+- Do not include `model/data/` or `model/artifacts/` in git changes.
 
-## Правила
-
-- Jupyter использовать только для исследований и экспериментов.
-- Не писать production-код в `.ipynb`.
-- Любая логика обучения, оценки и инференса должна жить в Python-модулях внутри `model/src/`.
-- Структура `model/` должна оставаться самодостаточной для Python-tooling и импорта пакета.
-- Целевой домен модели — смешанный русскоязычный UGC.
-- `Habr` используется как один из источников данных, но не считается единственным или основным целевым доменом.
-- Не добавлять `backend`, API и сервисные контракты в рамках задач по `model/`.
-- Для задач, связанных с разметкой токсичности, использовать рабочее определение и правила из `model/README.md`.
-
-## Порядок работы
-
-1. Прочитать `model/README.md`.
-2. Проверить `model/pyproject.toml`.
-3. Проверить `model/src/`, `model/tests/` и `model/configs/`.
-4. Использовать `model/notebooks/` только для исследовательских задач.
-5. Не включать содержимое `model/data/` и `model/artifacts/` в git-изменения.
-
-## Памятка Для Следующей Сессии
-
-- Отдельно помнить про кейс `dismissive imperative` вокруг фраз вида `поплачь`, `ну поплачь`, `поплачь об этом`, `поплач ещё`.
-- По текущим правилам разметки такие реплики обычно считать токсичными, если это направленное унизительное отмахивание от собеседника.
-- Не обобщать это на весь корень `плач`: `поплачем вместе`, `я поплачу и пойду дальше`, `плач`, `заплачь` сами по себе не образуют тот же устойчивый токсичный паттерн.
-- Важно: проблема сейчас не в post-hoc-слое, а в baseline feature engineering и seed/hard-case данных. Частный сигнал на `поплач*` в `baseline_features.py` — это временный костыль, а не целевая форма решения.
-- Если возвращаться к этой теме, приоритет такой:
-  1. расширить данные на класс `dismissive imperative` позитивными и негативными контрпримерами;
-  2. затем заменить узкий шаблон `поплач*` более общими признаками, которые описывают именно dismissive imperative, а не одно слово.
-- Если обсуждается `V3.3`, ориентир: учить модель смыслу короткой уничижительной приказной реплики, а не частной лексеме `поплачь`.
+- For toxicity-labeling tasks, use the working definition in `model/README.md`.
+- Treat dismissive imperative cases such as `поплачь`, `ну поплачь`, `поплачь об этом`, `поплач ещё` carefully.
+- Do not treat `поплач*` as a general lexical rule; use the dismissive-imperative meaning, not the token alone.
+- Do not generalize that pattern to the whole root `плач`.

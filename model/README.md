@@ -1,6 +1,6 @@
 # Model Workspace
 
-`model/` is the only active implementation area of the repository. Its job is to produce and serve the baseline toxicity model.
+`model/` contains the baseline toxicity model, training pipeline, inference CLI, and internal runtime.
 
 ## Boundaries
 
@@ -137,5 +137,5 @@ When the case is ambiguous, prefer the more conservative interpretation unless d
 ## Related docs
 
 - Project entry point: [README.md](../README.md)
-- Planned boundaries: [ARCHITECTURE.md](../ARCHITECTURE.md)
+- Service boundaries: [ARCHITECTURE.md](../ARCHITECTURE.md)
 - Baseline history: [MODEL_EVOLUTION.md](MODEL_EVOLUTION.md)

@@ -1,33 +1,16 @@
 # AGENTS.md
 
-## Текущий этап
+- Start backend-related work with `ARCHITECTURE.md`.
+- Then read `backend/README.md`.
+- Then inspect `backend/ToxicAnalyzer.sln`.
+- Then inspect `backend/ToxicAnalyzer.Api/`.
+- Then inspect integration contracts with `model/`.
 
-Baseline-модель считается готовой. Репозиторий перешёл к этапу разработки `backend`, который должен опираться на уже собранный `model/` как на внутренний сервис.
+- Keep implementation work inside `backend/` unless the task explicitly requires another directory.
+- Do not expand `frontend/` beyond API contract alignment unless the task requires it.
+- Do not move `model/` back into research work without a concrete need.
+- Use notebooks only inside `model/` and only for research tasks.
+- Keep final model code in regular Python modules, not `.ipynb`.
 
-## Границы
-
-- Основная зона реализации сейчас — `backend/`.
-- Не реализовывать заранее `frontend` сверх того, что нужно для согласования API-контрактов.
-- Не возвращать `model/` обратно в исследовательскую фазу без отдельной необходимости.
-- Использовать ноутбуки только как исследовательскую лабораторию внутри `model/`.
-- Держать итоговый код модели только в обычных Python-модулях, а не в `.ipynb`.
-
-## Нейминг коммитов
-
-- Использовать формат `type(scope): message`.
-- `type` писать в lowercase, например `docs`, `refactor`, `feat`, `fix`, `chore`.
-- `scope` указывать по затронутой области, например `model`, `architecture`, `docs`.
-- Не использовать произвольные сообщения без `type(scope)`.
-
-## С чего начинать задачи по backend
-
-Для задач, связанных с `backend/`, двигаться в таком порядке:
-
-0. `ARCHITECTURE.md` — чтобы держать границу между `backend`, `frontend` и `model`
-1. `backend/README.md`
-2. `backend/ToxicAnalyzer.sln`
-3. `backend/ToxicAnalyzer.Api/`
-4. Контракты интеграции с `model/`
-5. Только затем — смежные изменения в корневой документации, если они действительно нужны
-
-Если задача начинает расползаться в сторону преждевременной реализации `frontend` или переработки `model/`, нужно остановиться и вернуть объём работ в рамки `backend/`.
+- Use commit messages in `type(scope): message` format.
+- Keep `type` lowercase.

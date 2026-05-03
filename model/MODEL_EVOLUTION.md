@@ -1,7 +1,5 @@
 # Model Evolution
 
-This document keeps only the high-level history of the baseline. Detailed experiment logs, mismatch reports, and one-off review notes do not need to stay in the main documentation flow.
-
 ## Goal
 
 The model solves binary toxicity classification for Russian-language mixed UGC:

@@ -1,13 +1,6 @@
 # Toxic Analyzer Discord Bot
 
-`bots/discord` is a standalone TypeScript Discord bot. It listens to configured Discord channels, sends message text to the public backend API, and posts alerts when the backend returns `label === 1`.
-
-The bot is a backend client only:
-
-- it calls `POST /api/v1/toxicity/analyze`
-- it does not call `model/` directly
-- it keeps all bot-specific settings inside `bots/discord`
-- it does not require backend changes for MVP
+`bots/discord` is a TypeScript Discord bot. It reads configured Discord channels, sends message text to the backend API, and posts alerts when the backend returns `label === 1`.
 
 ## Requirements
 
@@ -23,7 +16,7 @@ cd bots/discord
 npm install
 ```
 
-## Discord Setup
+## Discord setup
 
 1. Open the [Discord Developer Portal](https://discord.com/developers/applications).
 2. Create a new application.
@@ -126,7 +119,7 @@ Checks:
 npm run check
 ```
 
-## Backend URL
+## Backend auth
 
 Set `backendBaseUrl` in `config.json`. Example local value:
 
@@ -145,9 +138,7 @@ to:
 
 - `POST {backendBaseUrl}/api/v1/toxicity/analyze`
 
-## Optional Backend Service Auth
-
-The bot still works against the public anonymous analyze endpoint. If you want it to act as an identified backend service client, configure `BACKEND_SERVICE_CLIENT_ID` and `BACKEND_SERVICE_CLIENT_SECRET` in `.env`.
+The bot works against the public anonymous analyze endpoint. If you want it to act as an identified backend service client, configure `BACKEND_SERVICE_CLIENT_ID` and `BACKEND_SERVICE_CLIENT_SECRET` in `.env`.
 
 At runtime the bot will:
 
@@ -155,9 +146,9 @@ At runtime the bot will:
 2. cache the short-lived bearer token
 3. reuse it for analyze requests until it nears expiration
 
-`BACKEND_AUTH_TOKEN` is still supported for pre-issued bearer tokens, but backend-issued client credentials are the preferred flow.
+`BACKEND_AUTH_TOKEN` is still supported for pre-issued bearer tokens.
 
-## Supported Placeholders
+## Supported placeholders
 
 - `{messageText}`
 - `{messageUrl}`
@@ -184,15 +175,15 @@ At runtime the bot will:
 
 Placeholders are replaced only from this whitelist. Unknown placeholders are left unchanged. The renderer does not execute code.
 
-## Template Notes
+## Template rules
 
 - Placeholders work in `content` and embed string fields.
 - `allowed_mentions` defaults to `{ "parse": [] }` when omitted.
-- Non-empty `attachments` are unsupported in MVP and rejected by config validation.
+- Non-empty `attachments` are unsupported and rejected by config validation.
 - `features` is rendered as a readable multi-line list.
 - `featuresJson` is rendered as JSON.
 
-## MVP Limitations
+## Unsupported
 
 - scans only `messageCreate`; `messageUpdate` is ignored
 - ignores bot messages, including its own
@@ -202,7 +193,7 @@ Placeholders are replaced only from this whitelist. Unknown placeholders are lef
 - no threshold logic in the bot
 - no moderation actions beyond posting an alert
 - no backend-provided settings
-- no multi-guild config model yet
+- no multi-guild config model
 - no slash commands
 - no storage/history
 - backend auth is optional; service-token flow is supported
