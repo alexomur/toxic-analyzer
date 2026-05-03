@@ -6,8 +6,16 @@ Toxic Analyzer is a monorepo for a toxicity-classification project. The baseline
 
 - `backend/` contains the public product API, integrates with the internal model service, and asynchronously stores deduplicated analyzed texts in PostgreSQL.
 - `model/` contains the trained baseline, training pipeline, inference CLI, and internal FastAPI runtime.
-- `frontend/` remains the next stage and should consume the stable backend contracts.
+- `frontend/` contains the React SPA that consumes the stable backend contracts.
 - Notebooks remain research-only. Final model code must live in regular Python modules.
+
+Current frontend-facing decisions:
+
+- browser users authenticate through backend cookie sessions with CSRF protection
+- self-registration is included in MVP
+- single-text analysis is an explainability flow
+- batch analysis is a client-side analytics flow
+- authenticated text lookup and backend-owned voteable text entities are part of the current frontend MVP flow
 
 ## Repository map
 
@@ -35,9 +43,11 @@ What starts:
 - `postgres-init` as a one-shot schema initializer
 - `model` as the internal FastAPI runtime
 - `backend` as the public ASP.NET Core API with asynchronous analysis capture enabled
+- `frontend` as the browser SPA served through Nginx
 
 Primary local endpoint:
 
+- frontend: `http://127.0.0.1:3000`
 - backend: `http://127.0.0.1:8080`
 - OpenAPI in local compose: `http://127.0.0.1:8080/openapi/v1.json`
 - Swagger UI in local compose: `http://127.0.0.1:8080/swagger`
@@ -70,6 +80,10 @@ Implemented public backend endpoints:
 
 - `POST /api/v1/toxicity/analyze`
 - `POST /api/v1/toxicity/analyze-batch`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
 
 ### Model runtime without compose
 

@@ -1,0 +1,126 @@
+@import '@fontsource/ibm-plex-sans/cyrillic-400.css';
+@import '@fontsource/ibm-plex-sans/cyrillic-500.css';
+@import '@fontsource/ibm-plex-sans/cyrillic-600.css';
+@import '@fontsource/ibm-plex-sans/cyrillic-700.css';
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-500.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/ibm-plex-sans/latin-700.css';
+@import '@fontsource/jetbrains-mono/latin-500.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 42 30% 97%;
+    --foreground: 164 24% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 164 24% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 164 24% 14%;
+    --primary: 164 56% 28%;
+    --primary-foreground: 44 60% 98%;
+    --secondary: 42 24% 92%;
+    --secondary-foreground: 164 20% 20%;
+    --muted: 40 18% 93%;
+    --muted-foreground: 164 10% 36%;
+    --accent: 22 88% 57%;
+    --accent-foreground: 34 100% 98%;
+    --border: 40 20% 84%;
+    --input: 40 18% 88%;
+    --ring: 164 56% 34%;
+    --success: 154 45% 44%;
+    --success-foreground: 154 100% 98%;
+    --warning: 36 88% 58%;
+    --warning-foreground: 36 100% 12%;
+    --danger: 0 72% 55%;
+    --danger-foreground: 0 100% 98%;
+    --surface: 42 24% 95%;
+    --surface-strong: 40 22% 90%;
+    --surface-soft: 45 20% 98%;
+    --chart-1: 164 52% 35%;
+    --chart-2: 21 86% 61%;
+    --chart-3: 151 43% 53%;
+    --chart-4: 44 90% 60%;
+    --chart-5: 196 70% 45%;
+    --radius: 1.1rem;
+  }
+
+  .dark {
+    --background: 164 18% 8%;
+    --foreground: 42 26% 94%;
+    --card: 164 16% 12%;
+    --card-foreground: 42 26% 94%;
+    --popover: 164 16% 12%;
+    --popover-foreground: 42 26% 94%;
+    --primary: 162 58% 60%;
+    --primary-foreground: 164 32% 10%;
+    --secondary: 164 12% 18%;
+    --secondary-foreground: 42 22% 92%;
+    --muted: 164 12% 16%;
+    --muted-foreground: 38 16% 74%;
+    --accent: 27 92% 64%;
+    --accent-foreground: 24 100% 10%;
+    --border: 164 10% 22%;
+    --input: 164 10% 18%;
+    --ring: 162 58% 60%;
+    --success: 154 56% 46%;
+    --success-foreground: 160 100% 96%;
+    --warning: 33 92% 60%;
+    --warning-foreground: 27 100% 12%;
+    --danger: 0 72% 62%;
+    --danger-foreground: 0 100% 98%;
+    --surface: 164 16% 11%;
+    --surface-strong: 164 14% 15%;
+    --surface-soft: 164 12% 14%;
+    --chart-1: 162 58% 60%;
+    --chart-2: 27 91% 62%;
+    --chart-3: 151 56% 52%;
+    --chart-4: 45 90% 62%;
+    --chart-5: 196 78% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply min-h-screen bg-background font-sans text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at top left, rgba(209, 250, 229, 0.52), transparent 26%),
+      radial-gradient(circle at top right, rgba(255, 237, 213, 0.32), transparent 18%),
+      linear-gradient(180deg, rgba(252, 250, 247, 0.96), rgba(247, 246, 241, 1));
+    background-attachment: fixed;
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(circle at top left, rgba(45, 212, 191, 0.12), transparent 22%),
+      radial-gradient(circle at top right, rgba(251, 146, 60, 0.08), transparent 16%),
+      linear-gradient(180deg, rgba(9, 16, 16, 1), rgba(11, 18, 18, 1));
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.16);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .surface-border {
+    border-image: linear-gradient(135deg, rgba(13, 148, 136, 0.14), rgba(249, 115, 22, 0.1)) 1;
+  }
+}
+
+#root {
+  @apply min-h-screen;
+}
