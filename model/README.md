@@ -43,6 +43,14 @@ train-baseline --data-source auto
 predict-baseline --text "ты ведешь себя как идиот"
 ```
 
+### Evaluate labeled test data
+
+```powershell
+evaluate-baseline
+```
+
+By default the command reads `data/processed/test_text.txt` in the `<text> ^ <toxicity>;` format and prints dataset-level metrics as JSON.
+
 ### Interactive CLI
 
 ```powershell

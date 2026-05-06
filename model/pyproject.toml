@@ -25,6 +25,7 @@ build-habr-annotation-compact-db = "toxic_analyzer.build_habr_annotation_compact
 build-mixed-toxic-dataset = "toxic_analyzer.build_mixed_toxic_dataset:main"
 train-baseline = "toxic_analyzer.train_baseline:main"
 predict-baseline = "toxic_analyzer.predict_baseline:main"
+evaluate-baseline = "toxic_analyzer.evaluate_baseline:main"
 ask-baseline = "toxic_analyzer.ask_baseline:main"
 apply-training-store-schema = "toxic_analyzer.apply_training_store_schema:main"
 import-mixed-dataset-to-postgres = "toxic_analyzer.import_mixed_dataset_to_postgres:main"
