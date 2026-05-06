@@ -59,8 +59,8 @@ Copy-Item config.example.json config.json
 - `DISCORD_TOKEN` - bot token from Discord Developer Portal
 - `BOT_CONFIG_PATH` - optional path to config JSON, defaults to `./config.json`
 - `BACKEND_AUTH_TOKEN` - optional pre-issued backend bearer token
-- `BACKEND_SERVICE_CLIENT_ID` - optional backend service client id
-- `BACKEND_SERVICE_CLIENT_SECRET` - optional backend service client secret
+- `BACKEND_SERVICE_CLIENT_ID` - backend service client id for the dedicated Discord bot client
+- `BACKEND_SERVICE_CLIENT_SECRET` - backend service client secret for the dedicated Discord bot client
 - `LOG_LEVEL` - optional pino log level, defaults to `info`
 
 ### `config.json`
@@ -134,11 +134,9 @@ The bot sends:
 }
 ```
 
-to:
+to `POST {backendBaseUrl}/api/v1/toxicity/analyze`.
 
-- `POST {backendBaseUrl}/api/v1/toxicity/analyze`
-
-The bot works against the public anonymous analyze endpoint. If you want it to act as an identified backend service client, configure `BACKEND_SERVICE_CLIENT_ID` and `BACKEND_SERVICE_CLIENT_SECRET` in `.env`.
+The bot must run as an authenticated backend client. Anonymous access is rejected by config validation.
 
 At runtime the bot will:
 
@@ -147,6 +145,13 @@ At runtime the bot will:
 3. reuse it for analyze requests until it nears expiration
 
 `BACKEND_AUTH_TOKEN` is still supported for pre-issued bearer tokens.
+
+Required backend service client posture:
+
+- use a dedicated Discord bot client id
+- grant only `analysis.submit`
+- do not grant `analysis.read`, `analysis.vote`, or any admin capability unless there is a separate reviewed requirement
+- store the secret only in `.env` or a production secret manager, never in `config.json`
 
 ## Supported placeholders
 

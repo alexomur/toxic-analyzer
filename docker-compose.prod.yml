@@ -1,0 +1,40 @@
+services:
+  model:
+    image: toxic-analyzer-model:prod
+    build:
+      context: ./model
+    environment:
+      MODEL_INTERNAL_AUTH_ENABLED: "true"
+      MODEL_INTERNAL_AUTH_HEADER_NAME: X-Internal-Api-Key
+      MODEL_INTERNAL_AUTH_KEY: ${MODEL_INTERNAL_AUTH_KEY:?set MODEL_INTERNAL_AUTH_KEY}
+      MODEL_ADMIN_API_ENABLED: ${MODEL_ADMIN_API_ENABLED:-false}
+      TOXIC_ANALYZER_POSTGRES_DSN: ${MODEL_POSTGRES_DSN:?set MODEL_POSTGRES_DSN}
+
+  backend:
+    image: toxic-analyzer-backend:prod
+    build:
+      context: ./backend
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Auth__SigningKey: ${BACKEND_AUTH_SIGNING_KEY:?set BACKEND_AUTH_SIGNING_KEY}
+      Auth__ConnectionString: ${BACKEND_AUTH_CONNECTION_STRING:?set BACKEND_AUTH_CONNECTION_STRING}
+      AnalysisCapture__Enabled: "true"
+      AnalysisCapture__ConnectionString: ${BACKEND_ANALYSIS_CONNECTION_STRING:?set BACKEND_ANALYSIS_CONNECTION_STRING}
+      ModelService__BaseUrl: http://model:8000/
+      ModelService__InternalApiKey: ${MODEL_INTERNAL_AUTH_KEY:?set MODEL_INTERNAL_AUTH_KEY}
+      ModelService__InternalApiKeyHeaderName: X-Internal-Api-Key
+    depends_on:
+      model:
+        condition: service_healthy
+
+  frontend:
+    image: toxic-analyzer-frontend:prod
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy

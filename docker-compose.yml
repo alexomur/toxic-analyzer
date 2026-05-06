@@ -37,6 +37,9 @@ services:
     container_name: toxic-analyzer-model
     environment:
       TOXIC_ANALYZER_POSTGRES_DSN: postgresql://${POSTGRES_USER:-toxic_model}:${POSTGRES_PASSWORD:-toxic_model_pw}@postgres:5432/${POSTGRES_DB:-toxic_analyzer}
+      MODEL_INTERNAL_AUTH_KEY: local-model-internal-key-change-me
+      MODEL_INTERNAL_AUTH_HEADER_NAME: X-Internal-Api-Key
+      MODEL_ADMIN_API_ENABLED: "false"
     volumes:
       - ./model/artifacts:/app/artifacts
     depends_on:
@@ -54,6 +57,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ModelService__BaseUrl: http://model:8000/
+      ModelService__InternalApiKey: local-model-internal-key-change-me
+      ModelService__InternalApiKeyHeaderName: X-Internal-Api-Key
       AnalysisCapture__Enabled: "true"
       AnalysisCapture__ConnectionString: postgresql://${POSTGRES_USER:-toxic_model}:${POSTGRES_PASSWORD:-toxic_model_pw}@postgres:5432/${POSTGRES_DB:-toxic_analyzer}
       AnalysisCapture__Schema: public

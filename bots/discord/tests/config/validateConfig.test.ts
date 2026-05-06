@@ -7,6 +7,8 @@ const validConfig = {
   discordToken: "token",
   backendBaseUrl: "http://localhost:5068",
   backendTimeoutMs: 10000,
+  backendServiceClientId: "discord-bot",
+  backendServiceClientSecret: "secret",
   scanChannelIds: ["123"],
   alertChannelId: "456",
   analyzeConcurrency: 4,
@@ -44,5 +46,15 @@ describe("validateConfig", () => {
         }
       })
     ).toThrow("Non-empty attachments are unsupported in MVP.");
+  });
+
+  it("requires authenticated backend access", () => {
+    expect(() =>
+      validateConfig({
+        ...validConfig,
+        backendServiceClientId: undefined,
+        backendServiceClientSecret: undefined
+      })
+    ).toThrow("Anonymous backend access is not allowed for the bot.");
   });
 });

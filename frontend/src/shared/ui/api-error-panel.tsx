@@ -1,5 +1,6 @@
 import { AlertCircle } from 'lucide-react'
 import { ApiError } from '@/shared/api/client'
+import { formatProblemErrorItem } from '@/shared/api/error-resolver'
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert'
 
 interface ApiErrorPanelProps {
@@ -18,14 +19,12 @@ export function ApiErrorPanel({ error, title = 'Не удалось выполн
         <div className="space-y-2">
           <AlertTitle>{title}</AlertTitle>
           <AlertDescription>
-            {apiError?.problem?.detail ?? apiError?.message ?? 'Сервер вернул неожиданную ошибку.'}
+            {apiError?.message ?? apiError?.problem?.detail ?? 'Сервер вернул неожиданную ошибку.'}
           </AlertDescription>
           {errors.length > 0 ? (
             <ul className="space-y-1 text-sm text-muted-foreground">
               {errors.map((item) => (
-                <li key={`${item.field}-${item.message}`}>
-                  {item.field}: {item.message}
-                </li>
+                <li key={`${item.field}-${item.message}`}>{formatProblemErrorItem(item)}</li>
               ))}
             </ul>
           ) : null}

@@ -1,5 +1,6 @@
 import { env } from '@/shared/config/env'
 import { getCsrfToken } from '@/shared/api/csrf'
+import { resolveProblemMessage } from '@/shared/api/error-resolver'
 import type { ProblemDetails } from '@/shared/api/types'
 
 export class ApiError extends Error {
@@ -64,7 +65,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   if (!response.ok) {
     const problem = parsedBody && typeof parsedBody === 'object' ? (parsedBody as ProblemDetails) : null
-    throw new ApiError(problem?.detail ?? problem?.title ?? response.statusText, response.status, problem)
+    throw new ApiError(resolveProblemMessage(problem, response.status, response.statusText, path, method), response.status, problem)
   }
 
   return parsedBody as T

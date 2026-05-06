@@ -25,6 +25,12 @@ This starts:
 - `backend`
 - `frontend`
 
+Local compose is intentionally development-oriented:
+
+- `backend` runs with `ASPNETCORE_ENVIRONMENT=Development`
+- Swagger/OpenAPI stays available only for local development
+- `model` still requires internal API auth, but the dev compose wires the shared key automatically
+
 To stop the stack:
 
 ```powershell
@@ -53,3 +59,15 @@ docker compose down -v
 - [backend/README.md](backend/README.md) - backend local development
 - [frontend/README.md](frontend/README.md) - frontend local development
 - [model/README.md](model/README.md) - model development and runtime
+
+## Production deployment
+
+Use `docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build` only after providing production secrets through environment variables.
+
+Production defaults after the security hardening:
+
+- public traffic goes only through the frontend nginx container or another ingress
+- `backend` and `model` are not published directly
+- `/swagger` and `/openapi` are not proxied publicly
+- `model` requires internal API auth from `backend`
+- model admin routes are disabled unless `MODEL_ADMIN_API_ENABLED=true`

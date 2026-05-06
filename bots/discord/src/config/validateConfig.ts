@@ -18,6 +18,7 @@ const configSchema = z.object({
   logLevel: z.string().trim().min(1).default("info"),
   alertTemplate: discordMessageTemplateSchema
 }).superRefine((config, context) => {
+  const hasAuthToken = config.backendAuthToken !== undefined;
   const hasServiceClientId = config.backendServiceClientId !== undefined;
   const hasServiceClientSecret = config.backendServiceClientSecret !== undefined;
 
@@ -26,6 +27,15 @@ const configSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: hasServiceClientId ? ["backendServiceClientSecret"] : ["backendServiceClientId"],
       message: "backendServiceClientId and backendServiceClientSecret must be configured together."
+    });
+  }
+
+  if (!hasAuthToken && !hasServiceClientId && !hasServiceClientSecret) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["backendAuthToken"],
+      message:
+        "Configure BACKEND_AUTH_TOKEN or BACKEND_SERVICE_CLIENT_ID/BACKEND_SERVICE_CLIENT_SECRET. Anonymous backend access is not allowed for the bot."
     });
   }
 });
