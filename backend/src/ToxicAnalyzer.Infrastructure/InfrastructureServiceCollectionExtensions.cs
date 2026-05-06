@@ -92,6 +92,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IAnalysisCaptureScheduler, AnalysisCaptureChannelScheduler>();
         services.AddSingleton<AnalysisCaptureDbConnectionFactory>();
         services.AddSingleton<AnalysisCaptureSchemaInitializer>();
+        services.AddSingleton<AnalysisCaptureStorageHealthCheck>();
         services.AddSingleton<IAnalysisTextStore, PostgresAnalysisCaptureStore>();
         services.AddSingleton<IAnalysisTextVotingRepository, PostgresAnalysisTextVotingRepository>();
         services.AddHostedService<AnalysisCaptureBackgroundService>();
@@ -121,6 +122,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IAuthenticationAttemptLimiter, InMemoryAuthenticationAttemptLimiter>();
         services.AddSingleton<AuthDbConnectionFactory>();
         services.AddSingleton<AuthSchemaInitializer>();
+        services.AddSingleton<AuthStorageHealthCheck>();
         services.AddSingleton<IAuthStore, PostgresAuthStore>();
         services.AddHostedService<DevelopmentAdminBootstrapHostedService>();
 

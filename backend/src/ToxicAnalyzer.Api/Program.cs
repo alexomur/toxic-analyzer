@@ -6,6 +6,8 @@ using ToxicAnalyzer.Api.Common.Frontend;
 using ToxicAnalyzer.Api.Common.Security;
 using ToxicAnalyzer.Api.Endpoints;
 using ToxicAnalyzer.Infrastructure;
+using ToxicAnalyzer.Infrastructure.AnalysisCapture;
+using ToxicAnalyzer.Infrastructure.Auth;
 using ToxicAnalyzer.Infrastructure.ModelService;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,7 +22,9 @@ builder.Services.AddAnalysisCaptureInfrastructure(builder.Configuration);
 builder.Services
     .AddHealthChecks()
     .AddCheck("live", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: ["live"])
-    .AddCheck<ModelServiceHealthCheck>("ready", tags: ["ready"]);
+    .AddCheck<ModelServiceHealthCheck>("model_service", tags: ["ready"])
+    .AddCheck<AuthStorageHealthCheck>("auth_storage", tags: ["ready"])
+    .AddCheck<AnalysisCaptureStorageHealthCheck>("analysis_capture_storage", tags: ["ready"]);
 
 var app = builder.Build();
 
