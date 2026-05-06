@@ -1,6 +1,5 @@
 """Runtime FastAPI routes for model health and inference."""
 
-
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
@@ -9,8 +8,8 @@ from toxic_analyzer.api.schemas import (
     BatchPredictionItemResponse,
     BatchPredictionRequest,
     BatchPredictionResponse,
-    ExplainPredictRequest,
     ExplainPredictionResponse,
+    ExplainPredictRequest,
     LiveHealthResponse,
     ModelInfoResponse,
     PredictionResponse,

@@ -11,6 +11,7 @@ from toxic_analyzer.admin_service import (
     RetrainJobRecord,
 )
 from toxic_analyzer.api.app import create_app
+from toxic_analyzer.api.boundary import AdminApiBoundary, InternalAuthOptions
 from toxic_analyzer.api.runtime_state import ModelRuntimeState
 from toxic_analyzer.baseline_model import ToxicityPrediction
 from toxic_analyzer.inference_service import ModelIdentity, ModelInfo
@@ -63,6 +64,7 @@ def _build_runtime_state(
 
     return ModelRuntimeState(
         default_model_path=default_model_path,
+        allowed_artifacts_root=default_model_path.parent,
         service_loader=service_loader,
     )
 
@@ -239,17 +241,32 @@ def test_reload_switches_active_model_and_failed_reload_keeps_previous_model(
         metrics={"test": {"overall": {"f1": 1.0}}},
     )
     admin_service = RetrainAdminService(store=store)
-    app = create_app(runtime_state=runtime_state, admin_service=admin_service)
+    app = create_app(
+        runtime_state=runtime_state,
+        admin_service=admin_service,
+        internal_auth=InternalAuthOptions(api_key="admin-secret"),
+        admin_boundary=AdminApiBoundary(enabled=True, artifacts_root=tmp_path),
+    )
 
     with TestClient(app) as client:
-        before_reload = client.post("/v1/predict", json={"text": "calm"})
-        reload_response = client.post("/v1/admin/reload", json={"model_key": "baseline-b"})
-        after_reload = client.post("/v1/predict", json={"text": "calm"})
+        auth_headers = {"X-Internal-Api-Key": "admin-secret"}
+        before_reload = client.post("/v1/predict", json={"text": "calm"}, headers=auth_headers)
+        reload_response = client.post(
+            "/v1/admin/reload",
+            json={"model_id": "baseline-b"},
+            headers=auth_headers,
+        )
+        after_reload = client.post("/v1/predict", json={"text": "calm"}, headers=auth_headers)
         failed_reload = client.post(
             "/v1/admin/reload",
-            json={"model_path": str(tmp_path / "missing.pkl")},
+            json={"model_id": "missing-model"},
+            headers=auth_headers,
         )
-        after_failed_reload = client.post("/v1/predict", json={"text": "calm"})
+        after_failed_reload = client.post(
+            "/v1/predict",
+            json={"text": "calm"},
+            headers=auth_headers,
+        )
 
     assert before_reload.status_code == 200
     assert before_reload.json()["model_key"] == "baseline-a"
@@ -261,8 +278,8 @@ def test_reload_switches_active_model_and_failed_reload_keeps_previous_model(
     assert after_reload.status_code == 200
     assert after_reload.json()["model_key"] == "baseline-b"
 
-    assert failed_reload.status_code == 400
-    assert "train-baseline" in failed_reload.json()["detail"]
+    assert failed_reload.status_code == 404
+    assert "Unknown model_id" in failed_reload.json()["detail"]
 
     assert after_failed_reload.status_code == 200
     assert after_failed_reload.json()["model_key"] == "baseline-b"
@@ -307,15 +324,25 @@ def test_retrain_endpoint_returns_job_key_and_status_moves_to_succeeded(
         training_runner=training_runner,
         artifact_dir=tmp_path / "artifacts",
     )
-    app = create_app(runtime_state=runtime_state, admin_service=admin_service)
+    app = create_app(
+        runtime_state=runtime_state,
+        admin_service=admin_service,
+        internal_auth=InternalAuthOptions(api_key="admin-secret"),
+        admin_boundary=AdminApiBoundary(enabled=True, artifacts_root=tmp_path),
+    )
 
     with TestClient(app) as client:
-        start_response = client.post("/v1/admin/retrain", json={"requested_by": "alice"})
+        auth_headers = {"X-Internal-Api-Key": "admin-secret"}
+        start_response = client.post(
+            "/v1/admin/retrain",
+            json={"requested_by": "alice", "training_profile": "default"},
+            headers=auth_headers,
+        )
         job_key = start_response.json()["job_key"]
-        queued_response = client.get(f"/v1/admin/jobs/{job_key}")
-        list_response = client.get("/v1/admin/jobs")
+        queued_response = client.get(f"/v1/admin/jobs/{job_key}", headers=auth_headers)
+        list_response = client.get("/v1/admin/jobs", headers=auth_headers)
         launcher.run_all()
-        succeeded_response = client.get(f"/v1/admin/jobs/{job_key}")
+        succeeded_response = client.get(f"/v1/admin/jobs/{job_key}", headers=auth_headers)
 
     assert start_response.status_code == 202
     assert start_response.json()["status"] == "queued"
@@ -337,3 +364,123 @@ def test_retrain_endpoint_returns_job_key_and_status_moves_to_succeeded(
     registered_model = store.get_model(output_model_key)
     assert registered_model is not None
     assert Path(registered_model.artifact_path).exists()
+
+
+def test_admin_endpoints_are_disabled_without_flag(tmp_path: Path) -> None:
+    runtime_state = _build_runtime_state(default_model_path=tmp_path / "model.pkl", service_map={})
+    app = create_app(
+        runtime_state=runtime_state,
+        internal_auth=InternalAuthOptions(enabled=False),
+        admin_boundary=AdminApiBoundary(enabled=False),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/v1/admin/reload", json={"model_id": "default"})
+
+    assert response.status_code == 404
+
+
+def test_admin_endpoints_require_internal_auth(tmp_path: Path) -> None:
+    model_path = tmp_path / "baseline-a.pkl"
+    runtime_state = _build_runtime_state(
+        default_model_path=model_path,
+        service_map={
+            model_path.resolve(): StubInferenceService(
+                model_key="baseline-a",
+                model_version="v3.3",
+                model_path=model_path,
+            )
+        },
+    )
+    app = create_app(
+        runtime_state=runtime_state,
+        admin_service=RetrainAdminService(store=InMemoryAdminStore()),
+        internal_auth=InternalAuthOptions(api_key="admin-secret"),
+        admin_boundary=AdminApiBoundary(enabled=True, artifacts_root=tmp_path),
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/v1/admin/reload", json={"model_id": "default"})
+
+    assert response.status_code == 401
+
+
+def test_admin_payload_rejects_raw_paths_and_unknown_allowlist_ids(tmp_path: Path) -> None:
+    model_path = tmp_path / "baseline-a.pkl"
+    runtime_state = _build_runtime_state(
+        default_model_path=model_path,
+        service_map={
+            model_path.resolve(): StubInferenceService(
+                model_key="baseline-a",
+                model_version="v3.3",
+                model_path=model_path,
+            )
+        },
+    )
+    app = create_app(
+        runtime_state=runtime_state,
+        admin_service=RetrainAdminService(store=InMemoryAdminStore()),
+        internal_auth=InternalAuthOptions(api_key="admin-secret"),
+        admin_boundary=AdminApiBoundary(enabled=True, artifacts_root=tmp_path),
+    )
+
+    with TestClient(app) as client:
+        auth_headers = {"X-Internal-Api-Key": "admin-secret"}
+        raw_reload = client.post(
+            "/v1/admin/reload",
+            json={"model_path": str(tmp_path / "outside.pkl")},
+            headers=auth_headers,
+        )
+        raw_retrain = client.post(
+            "/v1/admin/retrain",
+            json={"dataset_path": str(tmp_path / "dataset.sqlite3")},
+            headers=auth_headers,
+        )
+        unknown_reload = client.post(
+            "/v1/admin/reload",
+            json={"model_id": "unknown"},
+            headers=auth_headers,
+        )
+        unknown_retrain = client.post(
+            "/v1/admin/retrain",
+            json={"training_profile": "missing-profile"},
+            headers=auth_headers,
+        )
+
+    assert raw_reload.status_code == 422
+    assert raw_retrain.status_code == 422
+    assert unknown_reload.status_code == 404
+    assert unknown_retrain.status_code == 404
+
+
+def test_admin_path_traversal_is_rejected(tmp_path: Path) -> None:
+    model_path = tmp_path / "baseline-a.pkl"
+    runtime_state = _build_runtime_state(
+        default_model_path=model_path,
+        service_map={
+            model_path.resolve(): StubInferenceService(
+                model_key="baseline-a",
+                model_version="v3.3",
+                model_path=model_path,
+            )
+        },
+    )
+    app = create_app(
+        runtime_state=runtime_state,
+        internal_auth=InternalAuthOptions(api_key="admin-secret"),
+        admin_boundary=AdminApiBoundary(
+            enabled=True,
+            artifacts_root=tmp_path / "artifacts",
+            model_catalog={"escape": Path("../escape.pkl")},
+        ),
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/admin/reload",
+            json={"model_id": "escape"},
+            headers={"X-Internal-Api-Key": "admin-secret"},
+        )
+
+    assert response.status_code == 400
+    assert "escapes trusted root" in response.json()["detail"]

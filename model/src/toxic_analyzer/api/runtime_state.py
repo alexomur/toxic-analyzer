@@ -6,10 +6,12 @@ from pathlib import Path
 from threading import RLock
 from typing import Callable
 
+from toxic_analyzer.api.boundary import _resolve_inside_root
 from toxic_analyzer.inference_service import ModelIdentity, ToxicityInferenceService
 from toxic_analyzer.model_runtime import (
     DEFAULT_ARTIFACT_PATHS,
     DEFAULT_MODEL_PATH,
+    ROOT_DIR,
     ModelArtifactPaths,
     build_missing_model_message,
 )
@@ -47,10 +49,12 @@ class ModelRuntimeState:
         *,
         default_model_path: Path = DEFAULT_MODEL_PATH,
         artifacts: ModelArtifactPaths = DEFAULT_ARTIFACT_PATHS,
+        allowed_artifacts_root: Path = ROOT_DIR / "artifacts",
         service_loader: RuntimeServiceLoader | None = None,
     ) -> None:
         self.default_model_path = default_model_path.resolve()
         self.artifacts = artifacts
+        self.allowed_artifacts_root = allowed_artifacts_root.resolve()
         self._service_loader = service_loader or (
             lambda path: _default_service_loader(path, artifacts=artifacts)
         )
@@ -73,9 +77,10 @@ class ModelRuntimeState:
             return None
 
     def reload(self, model_path: Path | None = None) -> ToxicityInferenceService:
-        requested_path = (
+        requested_path = _resolve_inside_root(
+            self.allowed_artifacts_root,
             model_path or self._active_request_path or self.default_model_path
-        ).resolve()
+        )
         try:
             loaded_service = self._service_loader(requested_path)
         except Exception as exc:

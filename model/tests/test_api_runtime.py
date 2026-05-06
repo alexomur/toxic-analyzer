@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from toxic_analyzer.api.app import create_app
+from toxic_analyzer.api.boundary import InternalAuthOptions
 from toxic_analyzer.api.runtime_state import ModelRuntimeState
 from toxic_analyzer.baseline_model import (
     AppliedAdjustment,
@@ -103,17 +104,26 @@ def _build_runtime_state(
 
     return ModelRuntimeState(
         default_model_path=default_model_path,
+        allowed_artifacts_root=default_model_path.parent,
         service_loader=service_loader,
     )
+
 
 def test_runtime_reports_not_ready_when_model_missing(workspace_tmp_dir: Path) -> None:
     missing_path = workspace_tmp_dir / "missing-model.pkl"
     runtime_state = _build_runtime_state(default_model_path=missing_path, service_map={})
-    app = create_app(runtime_state=runtime_state)
+    app = create_app(
+        runtime_state=runtime_state,
+        internal_auth=InternalAuthOptions(api_key="runtime-secret"),
+    )
 
     with TestClient(app) as client:
         ready_response = client.get("/health/ready")
-        predict_response = client.post("/v1/predict", json={"text": "hello"})
+        predict_response = client.post(
+            "/v1/predict",
+            json={"text": "hello"},
+            headers={"X-Internal-Api-Key": "runtime-secret"},
+        )
 
     assert ready_response.status_code == 503
     assert ready_response.json()["status"] == "not_ready"
@@ -137,14 +147,19 @@ def test_runtime_predict_endpoints_expose_model_identity_and_preserve_batch_orde
             )
         },
     )
-    app = create_app(runtime_state=runtime_state)
+    app = create_app(
+        runtime_state=runtime_state,
+        internal_auth=InternalAuthOptions(api_key="runtime-secret"),
+    )
 
     with TestClient(app) as client:
         ready_response = client.get("/health/ready")
-        info_response = client.get("/v1/model/info")
+        auth_headers = {"X-Internal-Api-Key": "runtime-secret"}
+        info_response = client.get("/v1/model/info", headers=auth_headers)
         predict_response = client.post(
             "/v1/predict",
             json={"id": "single-1", "text": "You are an idiot"},
+            headers=auth_headers,
         )
         batch_response = client.post(
             "/v1/predict/batch",
@@ -154,10 +169,12 @@ def test_runtime_predict_endpoints_expose_model_identity_and_preserve_batch_orde
                     {"id": "b", "text": "toxic phrase here"},
                 ]
             },
+            headers=auth_headers,
         )
         explain_response = client.post(
             "/v1/predict/explain",
             json={"id": "exp-1", "text": "You are an idiot", "top_n": 1},
+            headers=auth_headers,
         )
 
     assert ready_response.status_code == 200
@@ -204,3 +221,32 @@ def test_runtime_predict_endpoints_expose_model_identity_and_preserve_batch_orde
         explain_payload["explanation"]["applied_adjustments"][0]["adjustment_name"]
         == "second_person_negated_insult"
     )
+
+
+def test_runtime_requires_internal_auth_and_rejects_oversized_text(workspace_tmp_dir: Path) -> None:
+    model_path = workspace_tmp_dir / "baseline-a.pkl"
+    runtime_state = _build_runtime_state(
+        default_model_path=model_path,
+        service_map={
+            model_path.resolve(): StubInferenceService(
+                model_key="baseline-a",
+                model_version="v3.3",
+                model_path=model_path,
+            )
+        },
+    )
+    app = create_app(
+        runtime_state=runtime_state,
+        internal_auth=InternalAuthOptions(api_key="runtime-secret"),
+    )
+
+    with TestClient(app) as client:
+        unauthorized = client.post("/v1/predict", json={"text": "hello"})
+        oversized = client.post(
+            "/v1/predict",
+            json={"text": "a" * 4097},
+            headers={"X-Internal-Api-Key": "runtime-secret"},
+        )
+
+    assert unauthorized.status_code == 401
+    assert oversized.status_code == 422

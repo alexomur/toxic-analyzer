@@ -102,8 +102,14 @@ Notes:
 
 - Inference endpoints require a local model artifact.
 - `POST /v1/predict/explain` returns the prediction plus feature-level explanation fields.
-- Admin endpoints are available only when the app is started with PostgreSQL settings that allow `RetrainAdminService` to be configured.
+- All non-health endpoints require the internal API key header, `X-Internal-Api-Key`, unless `MODEL_INTERNAL_AUTH_ENABLED=false` is set explicitly for local debugging.
+- Admin endpoints are disabled by default. Enable them only with `MODEL_ADMIN_API_ENABLED=true`.
 - Retrain and job-status endpoints additionally require PostgreSQL access.
+- Admin reload/retrain no longer accept raw filesystem paths or DSNs over HTTP. Use server-side allowlist ids:
+  - reload: `model_id`
+  - retrain: `training_profile`, optional `dataset_id`, optional `cache_profile`
+- Model artifact reload is restricted to the trusted artifacts directory. The runtime still uses Python pickle artifacts, so treat files under `model/artifacts/` as trusted deployment assets only.
+- Request bodies are capped at `1 MiB`, and text payloads are capped at `4096` characters.
 
 ## Docker runtime
 
@@ -118,6 +124,7 @@ Run the container:
 ```powershell
 docker run --rm -p 8000:8000 `
   --name toxic-analyzer-model `
+  -e MODEL_INTERNAL_AUTH_KEY="local-model-internal-key-change-me" `
   -e TOXIC_ANALYZER_POSTGRES_DSN="postgresql://user:pass@host.docker.internal:5432/toxic_analyzer" `
   toxic-analyzer-model:local
 ```

@@ -4,7 +4,9 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+MAX_TEXT_LENGTH = 4096
 
 
 class ApiSchema(BaseModel):
@@ -33,7 +35,7 @@ class ModelInfoResponse(ApiSchema):
 
 class PredictRequest(ApiSchema):
     id: str | int | None = None
-    text: str = Field(min_length=1)
+    text: str = Field(min_length=1, max_length=MAX_TEXT_LENGTH)
 
     @field_validator("text")
     @classmethod
@@ -53,7 +55,7 @@ class PredictionResponse(ApiSchema):
 
 class ExplainPredictRequest(ApiSchema):
     id: str | int | None = None
-    text: str = Field(min_length=1)
+    text: str = Field(min_length=1, max_length=MAX_TEXT_LENGTH)
     top_n: int = Field(default=10, ge=1, le=100)
 
     @field_validator("text")
@@ -107,7 +109,7 @@ class ExplainPredictionResponse(ApiSchema):
 
 class BatchPredictionItemRequest(ApiSchema):
     id: str | int | None = None
-    text: str = Field(min_length=1)
+    text: str = Field(min_length=1, max_length=MAX_TEXT_LENGTH)
 
     @field_validator("text")
     @classmethod
@@ -134,14 +136,7 @@ class BatchPredictionResponse(ApiSchema):
 
 
 class ReloadRequest(ApiSchema):
-    model_key: str | None = None
-    model_path: str | None = None
-
-    @model_validator(mode="after")
-    def validate_target(self) -> "ReloadRequest":
-        if self.model_key and self.model_path:
-            raise ValueError("Specify either model_key or model_path, not both.")
-        return self
+    model_id: str = Field(min_length=1)
 
 
 class ReloadResponse(ApiSchema):
@@ -154,12 +149,9 @@ class ReloadResponse(ApiSchema):
 class RetrainRequest(ApiSchema):
     requested_by: str | None = None
     trigger_type: Literal["manual", "scheduled", "feedback_threshold", "backfill"] = "manual"
-    data_source: Literal["auto", "sqlite", "postgres", "cache"] = "auto"
-    dataset_path: str | None = None
-    postgres_dsn: str | None = None
-    postgres_schema: str | None = None
-    dataset_cache_path: str | None = None
-    refresh_dataset_cache: bool = False
+    training_profile: str = Field(default="default", min_length=1)
+    dataset_id: str | None = Field(default=None, min_length=1)
+    cache_profile: str | None = Field(default=None, min_length=1)
 
 
 class RetrainResponse(ApiSchema):
