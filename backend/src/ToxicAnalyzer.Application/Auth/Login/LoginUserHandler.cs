@@ -10,19 +10,22 @@ public sealed class LoginUserHandler
     private readonly ISessionTokenService _sessionTokenService;
     private readonly IClock _clock;
     private readonly AuthOptions _authOptions;
+    private readonly IAuthenticationAttemptLimiter _attemptLimiter;
 
     public LoginUserHandler(
         IAuthStore authStore,
         IPasswordHasher passwordHasher,
         ISessionTokenService sessionTokenService,
         IClock clock,
-        AuthOptions authOptions)
+        AuthOptions authOptions,
+        IAuthenticationAttemptLimiter attemptLimiter)
     {
         _authStore = authStore;
         _passwordHasher = passwordHasher;
         _sessionTokenService = sessionTokenService;
         _clock = clock;
         _authOptions = authOptions;
+        _attemptLimiter = attemptLimiter;
     }
 
     public async Task<BrowserSessionResult> HandleAsync(LoginUserCommand command, CancellationToken cancellationToken)
@@ -36,12 +39,17 @@ public sealed class LoginUserHandler
                 [new ValidationError("request", "Email and password are required.")]);
         }
 
-        var user = await _authStore.GetUserByEmailAsync(command.Email.Trim(), cancellationToken);
+        var normalizedEmail = command.Email.Trim();
+        _attemptLimiter.ThrowIfLoginBlocked(normalizedEmail);
+
+        var user = await _authStore.GetUserByEmailAsync(normalizedEmail, cancellationToken);
         if (user is null || !_passwordHasher.VerifyPassword(command.Password, user.PasswordHash))
         {
+            _attemptLimiter.RecordLoginFailure(normalizedEmail);
             throw new AuthenticationFailedException("Invalid email or password.");
         }
 
+        _attemptLimiter.ResetLoginFailures(normalizedEmail);
         var session = await CreateSessionAsync(user.Id, cancellationToken);
         return new BrowserSessionResult(user, session, [AuthCapabilities.AnalysisRead, AuthCapabilities.AnalysisVote]);
     }

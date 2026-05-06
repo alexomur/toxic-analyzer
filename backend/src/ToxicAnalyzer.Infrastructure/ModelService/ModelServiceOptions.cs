@@ -7,4 +7,10 @@ public sealed class ModelServiceOptions
     public string BaseUrl { get; set; } = string.Empty;
 
     public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    public string InternalApiKeyHeaderName { get; set; } = "X-Internal-Api-Key";
+
+    public string? InternalApiKey { get; set; }
+
+    public int MaxConcurrentRequests { get; set; } = 16;
 }

@@ -4,6 +4,7 @@ public static class AuthCapabilities
 {
     public const string AnalysisRead = "analysis.read";
     public const string AnalysisVote = "analysis.vote";
+    public const string AnalysisSubmit = "analysis.submit";
     public const string ModelReload = "model.reload";
     public const string ModelRetrain = "model.retrain";
     public const string DatasetUpdate = "dataset.update";
@@ -13,6 +14,7 @@ public static class AuthCapabilities
     [
         AnalysisRead,
         AnalysisVote,
+        AnalysisSubmit,
         ModelReload,
         ModelRetrain,
         DatasetUpdate,

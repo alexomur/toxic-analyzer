@@ -1,4 +1,5 @@
 using ToxicAnalyzer.Application.Abstractions;
+using ToxicAnalyzer.Application.Auth;
 using ToxicAnalyzer.Application.Common;
 using ToxicAnalyzer.Domain.Texts;
 
@@ -29,16 +30,24 @@ public sealed class AnalyzeTextHandler
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var text = CreateTextContent(command.Text, "text");
-        var reportLevel = ResolveReportLevel(command.ReportLevel);
+        var text = ToxicityRequestValidation.CreateTextContent(command.Text, "text");
+        var reportLevel = ToxicityRequestValidation.ResolveReportLevel(command.ReportLevel);
         var (prediction, explanation) = await PredictAsync(text, reportLevel, cancellationToken);
         var analysis = ToxicityMappings.ToAnalysis(text, prediction, _clock.UtcNow);
         var actor = _currentActorAccessor.GetCurrent();
-        var textId = await _analysisTextVotingRepository.EnsureVoteableTextAsync(
-            analysis,
-            AnalysisTextOrigin.SelfSubmitted,
-            actor,
-            cancellationToken);
+        Guid? textId = null;
+
+        if (actor.HasCapability(AuthCapabilities.AnalysisSubmit))
+        {
+            var origin = actor.ActorType == ActorType.Service
+                ? AnalysisTextOrigin.BotSubmitted
+                : AnalysisTextOrigin.SelfSubmitted;
+            textId = await _analysisTextVotingRepository.EnsureVoteableTextAsync(
+                analysis,
+                origin,
+                actor,
+                cancellationToken);
+        }
 
         return new AnalyzeTextResult(
             analysis.Id.ToString(),
@@ -64,33 +73,6 @@ public sealed class AnalyzeTextHandler
 
         var prediction = await _modelPredictionClient.PredictAsync(text, cancellationToken);
         return (prediction, null);
-    }
-
-    private static TextContent CreateTextContent(string value, string fieldName)
-    {
-        try
-        {
-            return TextContent.Create(value);
-        }
-        catch (ArgumentException exception)
-        {
-            throw new ValidationException(
-                "Request validation failed.",
-                [new ValidationError(fieldName, exception.Message)]);
-        }
-    }
-
-    private static AnalyzeTextReportLevel ResolveReportLevel(string? value)
-    {
-        return value switch
-        {
-            null => AnalyzeTextReportLevel.Summary,
-            "summary" => AnalyzeTextReportLevel.Summary,
-            "full" => AnalyzeTextReportLevel.Full,
-            _ => throw new ValidationException(
-                "Request validation failed.",
-                [new ValidationError("reportLevel", "Report level must be either 'summary' or 'full'.")])
-        };
     }
 
     private static AnalyzeTextExplanation MapExplanation(ModelPredictionExplanation explanation)

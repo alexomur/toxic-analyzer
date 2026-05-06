@@ -51,7 +51,7 @@ public sealed class RegisterUserHandler
         var existingUser = await _authStore.GetUserByEmailAsync(email, cancellationToken);
         if (existingUser is not null)
         {
-            throw new ConflictException("A user with the same email already exists.");
+            throw new ConflictException("A user with the same email already exists.", "email_already_registered");
         }
 
         var user = await _authStore.CreateUserAsync(

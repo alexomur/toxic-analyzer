@@ -14,8 +14,11 @@ using ToxicAnalyzer.Api.Common.Frontend;
 using ToxicAnalyzer.Api.Common.OpenApi;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
+using System.Threading.RateLimiting;
 
 namespace ToxicAnalyzer.Api.Common.DependencyInjection;
 
@@ -31,6 +34,13 @@ public static class ApiServiceCollectionExtensions
 
         services.AddHttpContextAccessor();
         services.AddDataProtection();
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            options.ForwardLimit = 1;
+            options.KnownIPNetworks.Clear();
+            options.KnownProxies.Clear();
+        });
         services.AddSingleton(frontendOptions);
         services.AddCors(options =>
         {
@@ -45,6 +55,53 @@ public static class ApiServiceCollectionExtensions
                         .AllowCredentials();
                 }
             });
+        });
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.OnRejected = async (context, cancellationToken) =>
+            {
+                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                {
+                    context.HttpContext.Response.Headers["Retry-After"] =
+                        Math.Ceiling(retryAfter.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+
+                context.HttpContext.Response.ContentType = "application/problem+json";
+                await context.HttpContext.Response.WriteAsJsonAsync(
+                    new
+                    {
+                        title = "Too many requests.",
+                        status = StatusCodes.Status429TooManyRequests,
+                        detail = "Rate limit exceeded."
+                    },
+                    cancellationToken: cancellationToken);
+            };
+
+            options.AddPolicy(RateLimitPolicyNames.AuthCredential, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    $"auth:{GetRemoteIpPartition(httpContext)}",
+                    _ => CreateFixedWindowLimiter(10, TimeSpan.FromMinutes(5))));
+
+            options.AddPolicy(RateLimitPolicyNames.ServiceToken, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    $"service-token:{GetRemoteIpPartition(httpContext)}",
+                    _ => CreateFixedWindowLimiter(20, TimeSpan.FromMinutes(5))));
+
+            options.AddPolicy(RateLimitPolicyNames.PublicAnalyze, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    $"public-analyze:{GetActorPartition(httpContext)}",
+                    _ => CreateFixedWindowLimiter(30, TimeSpan.FromMinutes(1))));
+
+            options.AddPolicy(RateLimitPolicyNames.ProtectedRead, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    $"protected-read:{GetActorPartition(httpContext)}",
+                    _ => CreateFixedWindowLimiter(60, TimeSpan.FromMinutes(1))));
+
+            options.AddPolicy(RateLimitPolicyNames.ProtectedVote, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    $"protected-vote:{GetActorPartition(httpContext)}",
+                    _ => CreateFixedWindowLimiter(40, TimeSpan.FromMinutes(1))));
         });
         services.AddSingleton<IAnonymousActorCookieService, AnonymousActorCookieService>();
         services.AddSingleton<ISessionCookieService, SessionCookieService>();
@@ -142,6 +199,38 @@ public static class ApiServiceCollectionExtensions
                principal.FindAll(AuthClaimTypes.Scope)
                    .SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
                    .Any(value => string.Equals(value, capability, StringComparison.Ordinal));
+    }
+
+    private static FixedWindowRateLimiterOptions CreateFixedWindowLimiter(int permitLimit, TimeSpan window)
+    {
+        return new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = permitLimit,
+            Window = window,
+            QueueLimit = 0,
+            AutoReplenishment = true
+        };
+    }
+
+    private static string GetRemoteIpPartition(HttpContext httpContext)
+    {
+        return httpContext.Connection.RemoteIpAddress?.ToString()
+            ?? httpContext.Request.Headers["X-Forwarded-For"].ToString()
+            ?? "unknown";
+    }
+
+    private static string GetActorPartition(HttpContext httpContext)
+    {
+        var user = httpContext.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            return user.FindFirstValue(AuthClaimTypes.ClientId)
+                ?? user.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? user.FindFirstValue("sub")
+                ?? "authenticated";
+        }
+
+        return GetRemoteIpPartition(httpContext);
     }
 
     private sealed class SystemClock : IClock

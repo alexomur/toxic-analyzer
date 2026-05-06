@@ -34,7 +34,7 @@ public sealed class AnalyzeBatchHandler
         var validatedItems = command.Items
             .Select((item, index) => new ValidatedBatchItem(
                 index,
-                CreateTextContent(item.Text, $"items[{index}].text"),
+                ToxicityRequestValidation.CreateTextContent(item.Text, $"items[{index}].text"),
                 item.ClientItemId))
             .ToArray();
 
@@ -85,37 +85,7 @@ public sealed class AnalyzeBatchHandler
                 [new ValidationError("items", "Batch items are required.")]);
         }
 
-        if (command.Items.Count == 0)
-        {
-            throw new ValidationException(
-                "Request validation failed.",
-                [new ValidationError("items", "Batch must contain at least one item.")]);
-        }
-
-        if (command.Items.Count > ToxicityApplicationLimits.MaxBatchSize)
-        {
-            throw new ValidationException(
-                "Request validation failed.",
-                [
-                    new ValidationError(
-                        "items",
-                        $"Batch size must not exceed {ToxicityApplicationLimits.MaxBatchSize}.")
-                ]);
-        }
-    }
-
-    private static TextContent CreateTextContent(string value, string fieldName)
-    {
-        try
-        {
-            return TextContent.Create(value);
-        }
-        catch (ArgumentException exception)
-        {
-            throw new ValidationException(
-                "Request validation failed.",
-                [new ValidationError(fieldName, exception.Message)]);
-        }
+        ToxicityRequestValidation.ValidateBatchSize(command.Items.Count);
     }
 
     private sealed record ValidatedBatchItem(int Position, TextContent Text, string? ClientItemId);

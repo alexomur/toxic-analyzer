@@ -1,4 +1,6 @@
 using ToxicAnalyzer.Application.Abstractions;
+using ToxicAnalyzer.Application.Auth;
+using ToxicAnalyzer.Application.Common;
 using ToxicAnalyzer.Application.Toxicity.AnalyzeBatch;
 using ToxicAnalyzer.Application.Toxicity.AnalyzeText;
 using ToxicAnalyzer.Application.Toxicity.GetRandomText;
@@ -16,13 +18,15 @@ internal sealed class TestFixture
         FakeAnalysisCaptureScheduler analysisCaptureScheduler,
         FakeClock clock,
         FakeAnalysisTextVotingRepository analysisTextVotingRepository,
-        FakeCurrentActorAccessor currentActorAccessor)
+        FakeCurrentActorAccessor currentActorAccessor,
+        FakeAuthenticationAttemptLimiter authenticationAttemptLimiter)
     {
         ModelClient = modelClient;
         AnalysisCaptureScheduler = analysisCaptureScheduler;
         Clock = clock;
         AnalysisTextVotingRepository = analysisTextVotingRepository;
         CurrentActorAccessor = currentActorAccessor;
+        AuthenticationAttemptLimiter = authenticationAttemptLimiter;
         AnalyzeTextHandler = new AnalyzeTextHandler(modelClient, analysisTextVotingRepository, currentActorAccessor, clock);
         AnalyzeBatchHandler = new AnalyzeBatchHandler(modelClient, analysisCaptureScheduler, currentActorAccessor, clock);
         GetRandomTextHandler = new GetRandomTextHandler(analysisTextVotingRepository);
@@ -39,6 +43,8 @@ internal sealed class TestFixture
     public FakeAnalysisTextVotingRepository AnalysisTextVotingRepository { get; }
 
     public FakeCurrentActorAccessor CurrentActorAccessor { get; }
+
+    public FakeAuthenticationAttemptLimiter AuthenticationAttemptLimiter { get; }
 
     public AnalyzeTextHandler AnalyzeTextHandler { get; }
 
@@ -57,7 +63,14 @@ internal sealed class TestFixture
         var clock = new FakeClock(new DateTimeOffset(2026, 4, 29, 12, 0, 0, TimeSpan.Zero));
         var analysisTextVotingRepository = new FakeAnalysisTextVotingRepository();
         var currentActorAccessor = new FakeCurrentActorAccessor();
-        return new TestFixture(modelClient, analysisCaptureScheduler, clock, analysisTextVotingRepository, currentActorAccessor);
+        var authenticationAttemptLimiter = new FakeAuthenticationAttemptLimiter();
+        return new TestFixture(
+            modelClient,
+            analysisCaptureScheduler,
+            clock,
+            analysisTextVotingRepository,
+            currentActorAccessor,
+            authenticationAttemptLimiter);
     }
 }
 
@@ -188,6 +201,57 @@ internal sealed class FakeClock : IClock
     }
 
     public DateTimeOffset UtcNow { get; }
+}
+
+internal sealed class FakeAuthenticationAttemptLimiter : IAuthenticationAttemptLimiter
+{
+    public HashSet<string> BlockedLogins { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public HashSet<string> BlockedServiceClients { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public List<string> LoginFailures { get; } = [];
+
+    public List<string> ServiceTokenFailures { get; } = [];
+
+    public List<string> LoginResets { get; } = [];
+
+    public List<string> ServiceTokenResets { get; } = [];
+
+    public void ThrowIfLoginBlocked(string email)
+    {
+        if (BlockedLogins.Contains(email))
+        {
+            throw new RateLimitExceededException("login blocked", TimeSpan.FromMinutes(5));
+        }
+    }
+
+    public void RecordLoginFailure(string email)
+    {
+        LoginFailures.Add(email);
+    }
+
+    public void ResetLoginFailures(string email)
+    {
+        LoginResets.Add(email);
+    }
+
+    public void ThrowIfServiceTokenBlocked(string clientId)
+    {
+        if (BlockedServiceClients.Contains(clientId))
+        {
+            throw new RateLimitExceededException("service token blocked", TimeSpan.FromMinutes(5));
+        }
+    }
+
+    public void RecordServiceTokenFailure(string clientId)
+    {
+        ServiceTokenFailures.Add(clientId);
+    }
+
+    public void ResetServiceTokenFailures(string clientId)
+    {
+        ServiceTokenResets.Add(clientId);
+    }
 }
 
 internal static class TestData

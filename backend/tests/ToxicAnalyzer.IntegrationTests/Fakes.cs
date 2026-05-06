@@ -311,6 +311,23 @@ public sealed class FakeAuthStore : IAuthStore
             capabilities.Distinct(StringComparer.Ordinal).ToArray());
     }
 
+    public void AddUser(string email, string password, string role = "member", string? username = null)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var user = new AuthUser(
+            Guid.NewGuid(),
+            email,
+            username,
+            role,
+            _passwordHasher.HashPassword(password),
+            "active",
+            now,
+            now);
+        _usersByEmail[email] = user;
+        _usersById[user.Id] = user;
+        _userCapabilities[user.Id] = ResolveRoleCapabilities(role);
+    }
+
     private IReadOnlyList<string> ResolveCapabilities(AuthUser user)
     {
         return _userCapabilities.TryGetValue(user.Id, out var capabilities)
@@ -326,6 +343,7 @@ public sealed class FakeAuthStore : IAuthStore
             [
                 AuthCapabilities.AnalysisRead,
                 AuthCapabilities.AnalysisVote,
+                AuthCapabilities.AnalysisSubmit,
                 AuthCapabilities.ModelReload,
                 AuthCapabilities.ModelRetrain,
                 AuthCapabilities.DatasetUpdate,

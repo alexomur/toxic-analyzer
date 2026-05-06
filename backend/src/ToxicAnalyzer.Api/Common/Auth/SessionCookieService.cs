@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using ToxicAnalyzer.Application.Auth;
 
 namespace ToxicAnalyzer.Api.Common.Auth;
@@ -13,10 +14,12 @@ public interface ISessionCookieService
 public sealed class SessionCookieService : ISessionCookieService
 {
     private readonly AuthOptions _options;
+    private readonly IHostEnvironment _environment;
 
-    public SessionCookieService(IOptions<AuthOptions> options)
+    public SessionCookieService(IOptions<AuthOptions> options, IHostEnvironment environment)
     {
         _options = options.Value;
+        _environment = environment;
     }
 
     public void AppendSessionCookies(HttpContext httpContext, SessionIssueResult session)
@@ -34,8 +37,9 @@ public sealed class SessionCookieService : ISessionCookieService
 
     public void ClearSessionCookies(HttpContext httpContext)
     {
-        httpContext.Response.Cookies.Delete(_options.SessionCookieName);
-        httpContext.Response.Cookies.Delete(_options.CsrfCookieName);
+        var options = CreateCookieOptions(httpContext, true, DateTimeOffset.UnixEpoch);
+        httpContext.Response.Cookies.Delete(_options.SessionCookieName, options);
+        httpContext.Response.Cookies.Delete(_options.CsrfCookieName, CreateCookieOptions(httpContext, false, DateTimeOffset.UnixEpoch));
     }
 
     private CookieOptions CreateCookieOptions(HttpContext httpContext, bool httpOnly, DateTimeOffset expiresAt)
@@ -45,7 +49,7 @@ public sealed class SessionCookieService : ISessionCookieService
             HttpOnly = httpOnly,
             IsEssential = true,
             SameSite = SameSiteMode.Lax,
-            Secure = httpContext.Request.IsHttps,
+            Secure = !_environment.IsDevelopment() || httpContext.Request.IsHttps,
             Expires = expiresAt
         };
     }

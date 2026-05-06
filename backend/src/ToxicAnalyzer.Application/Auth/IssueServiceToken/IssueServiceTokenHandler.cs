@@ -10,19 +10,22 @@ public sealed class IssueServiceTokenHandler
     private readonly IAccessTokenIssuer _accessTokenIssuer;
     private readonly IClock _clock;
     private readonly AuthOptions _authOptions;
+    private readonly IAuthenticationAttemptLimiter _attemptLimiter;
 
     public IssueServiceTokenHandler(
         IAuthStore authStore,
         IPasswordHasher passwordHasher,
         IAccessTokenIssuer accessTokenIssuer,
         IClock clock,
-        AuthOptions authOptions)
+        AuthOptions authOptions,
+        IAuthenticationAttemptLimiter attemptLimiter)
     {
         _authStore = authStore;
         _passwordHasher = passwordHasher;
         _accessTokenIssuer = accessTokenIssuer;
         _clock = clock;
         _authOptions = authOptions;
+        _attemptLimiter = attemptLimiter;
     }
 
     public async Task<ServiceAccessTokenResult> HandleAsync(
@@ -38,16 +41,21 @@ public sealed class IssueServiceTokenHandler
                 [new ValidationError("request", "clientId and clientSecret are required.")]);
         }
 
+        var normalizedClientId = command.ClientId.Trim();
+        _attemptLimiter.ThrowIfServiceTokenBlocked(normalizedClientId);
+
         var authenticationInfo = await _authStore.GetServiceClientAuthenticationInfoAsync(
-            command.ClientId.Trim(),
+            normalizedClientId,
             _clock.UtcNow,
             cancellationToken);
 
         if (authenticationInfo is null || !HasValidSecret(authenticationInfo, command.ClientSecret))
         {
+            _attemptLimiter.RecordServiceTokenFailure(normalizedClientId);
             throw new AuthenticationFailedException("Invalid service client credentials.");
         }
 
+        _attemptLimiter.ResetServiceTokenFailures(normalizedClientId);
         var expiresAt = _clock.UtcNow.Add(_authOptions.ServiceAccessTokenLifetime);
         return _accessTokenIssuer.IssueServiceAccessToken(
             authenticationInfo.Client,

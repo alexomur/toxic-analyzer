@@ -21,23 +21,29 @@ public static class AuthEndpoints
         group.MapPost("/register", RegisterAsync)
             .WithName("RegisterUser")
             .WithSummary("Register a new frontend user and create a browser session.")
+            .RequireRateLimiting(RateLimitPolicyNames.AuthCredential)
             .Produces<AuthSessionResponse>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPost("/login", LoginAsync)
             .WithName("LoginUser")
             .WithSummary("Authenticate a frontend user and create a browser session.")
+            .RequireRateLimiting(RateLimitPolicyNames.AuthCredential)
             .Produces<AuthSessionResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         group.MapPost("/service-token", IssueServiceTokenAsync)
             .AllowAnonymous()
             .WithName("IssueServiceToken")
             .WithSummary("Authenticate a service client and issue a short-lived bearer access token.")
+            .RequireRateLimiting(RateLimitPolicyNames.ServiceToken)
             .Produces<ServiceTokenResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         group.MapPost("/logout", LogoutAsync)

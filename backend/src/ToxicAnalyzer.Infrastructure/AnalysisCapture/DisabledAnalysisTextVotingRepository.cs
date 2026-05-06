@@ -16,19 +16,19 @@ public sealed class DisabledAnalysisTextVotingRepository : IAnalysisTextVotingRe
 
     public Task<AnalysisTextVotingCandidate?> GetRandomAsync(CancellationToken cancellationToken)
     {
-        throw new ToxicAnalyzer.Application.Common.ApplicationException(
+        throw new FeatureDisabledException(
             "Analysis text voting is unavailable because AnalysisCapture is disabled.");
     }
 
     public Task<AnalysisTextVotingDetails?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        throw new ToxicAnalyzer.Application.Common.ApplicationException(
+        throw new FeatureDisabledException(
             "Analysis text voting is unavailable because AnalysisCapture is disabled.");
     }
 
     public Task<bool> RegisterVoteAsync(Guid id, AnalysisTextVoteKind vote, CurrentActor actor, CancellationToken cancellationToken)
     {
-        throw new ToxicAnalyzer.Application.Common.ApplicationException(
+        throw new FeatureDisabledException(
             "Analysis text voting is unavailable because AnalysisCapture is disabled.");
     }
 }

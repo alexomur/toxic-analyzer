@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using ToxicAnalyzer.Application.Abstractions;
 using ToxicAnalyzer.Application.Auth;
+using ToxicAnalyzer.Infrastructure.ModelService;
 
 namespace ToxicAnalyzer.IntegrationTests;
 
@@ -23,6 +24,28 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     private readonly FakeAnalysisTextVotingRepository _analysisTextVotingRepository = new();
     private readonly FakeAuthStore _authStore = new();
     private readonly FakeClock _clock = new(DateTimeOffset.UtcNow);
+    private readonly string _environment;
+    private readonly IReadOnlyDictionary<string, string?> _configurationOverrides;
+
+    public ApiWebApplicationFactory()
+        : this("Development", null)
+    {
+    }
+
+    private ApiWebApplicationFactory(
+        string environment,
+        IReadOnlyDictionary<string, string?>? configurationOverrides)
+    {
+        _environment = environment;
+        _configurationOverrides = configurationOverrides ?? new Dictionary<string, string?>();
+    }
+
+    public static ApiWebApplicationFactory CreateConfigured(
+        string environment = "Development",
+        IReadOnlyDictionary<string, string?>? configurationOverrides = null)
+    {
+        return new ApiWebApplicationFactory(environment, configurationOverrides);
+    }
 
     public FakeModelPredictionClient ModelPredictionClient => _modelPredictionClient;
 
@@ -36,16 +59,26 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Development");
+        builder.UseEnvironment(_environment);
         builder.ConfigureAppConfiguration((_, configurationBuilder) =>
         {
-            configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+            var settings = new Dictionary<string, string?>
             {
                 [$"{AuthOptions.SectionName}:Issuer"] = TestIssuer,
                 [$"{AuthOptions.SectionName}:Audience"] = TestAudience,
                 [$"{AuthOptions.SectionName}:SigningKey"] = TestSigningKey,
-                [$"{AuthOptions.SectionName}:AnonymousCookieName"] = "ta_test_actor"
-            });
+                [$"{AuthOptions.SectionName}:AnonymousCookieName"] = "ta_test_actor",
+                [$"{ModelServiceOptions.SectionName}:BaseUrl"] = "http://model.test/",
+                [$"{ModelServiceOptions.SectionName}:InternalApiKey"] = "integration-model-internal-api-key-1234567890",
+                [$"{ModelServiceOptions.SectionName}:InternalApiKeyHeaderName"] = "X-Internal-Api-Key"
+            };
+
+            foreach (var entry in _configurationOverrides)
+            {
+                settings[entry.Key] = entry.Value;
+            }
+
+            configurationBuilder.AddInMemoryCollection(settings);
         });
 
         builder.ConfigureServices(services =>

@@ -40,7 +40,8 @@ public sealed class AuthHandlersTests
             hasher,
             new FakeSessionTokenService(),
             new FakeClock(new DateTimeOffset(2026, 5, 3, 9, 0, 0, TimeSpan.Zero)),
-            new AuthOptions());
+            new AuthOptions(),
+            new FakeAuthenticationAttemptLimiter());
 
         var exception = await Assert.ThrowsAsync<AuthenticationFailedException>(() => handler.HandleAsync(
             new LoginUserCommand("user@example.com", "wrong-password"),
@@ -62,7 +63,8 @@ public sealed class AuthHandlersTests
             new FakePasswordHasher(),
             new FakeAccessTokenIssuer(),
             new FakeClock(new DateTimeOffset(2026, 5, 3, 9, 0, 0, TimeSpan.Zero)),
-            new AuthOptions { ServiceAccessTokenLifetime = TimeSpan.FromMinutes(10) });
+            new AuthOptions { ServiceAccessTokenLifetime = TimeSpan.FromMinutes(10) },
+            new FakeAuthenticationAttemptLimiter());
 
         var result = await handler.HandleAsync(
             new IssueServiceTokenCommand("discord-bot", "secret"),
@@ -167,6 +169,33 @@ public sealed class AuthHandlersTests
                 client.ClientId,
                 client.IsTrusted,
                 capabilities);
+        }
+    }
+
+    private sealed class FakeAuthenticationAttemptLimiter : IAuthenticationAttemptLimiter
+    {
+        public void ThrowIfLoginBlocked(string email)
+        {
+        }
+
+        public void RecordLoginFailure(string email)
+        {
+        }
+
+        public void ResetLoginFailures(string email)
+        {
+        }
+
+        public void ThrowIfServiceTokenBlocked(string clientId)
+        {
+        }
+
+        public void RecordServiceTokenFailure(string clientId)
+        {
+        }
+
+        public void ResetServiceTokenFailures(string clientId)
+        {
         }
     }
 }

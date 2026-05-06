@@ -4,6 +4,7 @@ using ToxicAnalyzer.Application.Toxicity.AnalyzeText;
 using ToxicAnalyzer.Application.Toxicity.GetRandomText;
 using ToxicAnalyzer.Application.Toxicity.GetTextById;
 using ToxicAnalyzer.Application.Toxicity.VoteText;
+using ToxicAnalyzer.Application.Auth;
 using ToxicAnalyzer.Api.Common.Auth;
 
 namespace ToxicAnalyzer.Api.Endpoints;
@@ -19,7 +20,9 @@ public static class ToxicityEndpoints
         group.MapPost("/analyze", AnalyzeAsync)
             .WithName("AnalyzeText")
             .WithSummary("Analyze a single text for toxicity.")
+            .RequireRateLimiting(RateLimitPolicyNames.PublicAnalyze)
             .Produces<AnalyzeTextResponse>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .ProducesProblem(StatusCodes.Status504GatewayTimeout)
@@ -28,9 +31,12 @@ public static class ToxicityEndpoints
         group.MapPost("/analyze-batch", AnalyzeBatchAsync)
             .WithName("AnalyzeTextBatch")
             .WithSummary("Analyze a batch of texts for toxicity.")
-            .RequireAuthorization(AuthPolicies.RequireAuthenticated)
+            .RequireAuthorization(AuthPolicies.Capability(AuthCapabilities.AnalysisRead))
+            .RequireRateLimiting(RateLimitPolicyNames.ProtectedRead)
             .Produces<AnalyzeBatchResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .ProducesProblem(StatusCodes.Status504GatewayTimeout)
@@ -39,27 +45,36 @@ public static class ToxicityEndpoints
         group.MapGet("/texts/random", GetRandomTextAsync)
             .WithName("GetRandomAnalysisText")
             .WithSummary("Get a random text for authenticated toxicity voting.")
-            .RequireAuthorization(AuthPolicies.RequireAuthenticated)
+            .RequireAuthorization(AuthPolicies.Capability(AuthCapabilities.AnalysisVote))
+            .RequireRateLimiting(RateLimitPolicyNames.ProtectedVote)
             .Produces<GetRandomTextResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
         group.MapGet("/texts/{textId:guid}", GetTextByIdAsync)
             .WithName("GetAnalysisTextById")
             .WithSummary("Get stored voting information for a text by id.")
-            .RequireAuthorization(AuthPolicies.RequireAuthenticated)
+            .RequireAuthorization(AuthPolicies.Capability(AuthCapabilities.AnalysisRead))
+            .RequireRateLimiting(RateLimitPolicyNames.ProtectedRead)
             .Produces<GetTextByIdResponse>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status500InternalServerError);
 
         group.MapPost("/texts/{textId:guid}/vote", VoteTextAsync)
             .WithName("VoteAnalysisText")
             .WithSummary("Submit an authenticated toxicity vote for a stored text.")
-            .RequireAuthorization(AuthPolicies.RequireAuthenticated)
+            .RequireAuthorization(AuthPolicies.Capability(AuthCapabilities.AnalysisVote))
+            .RequireRateLimiting(RateLimitPolicyNames.ProtectedVote)
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status500InternalServerError);

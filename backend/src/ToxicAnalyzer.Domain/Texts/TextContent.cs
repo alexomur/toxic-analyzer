@@ -4,6 +4,8 @@ namespace ToxicAnalyzer.Domain.Texts;
 
 public sealed record TextContent
 {
+    public const int MaxLength = 4096;
+
     private TextContent(string original, string normalized)
     {
         Original = original;
@@ -22,6 +24,11 @@ public sealed record TextContent
         if (normalized.Length == 0)
         {
             throw new ArgumentException("Text must not be blank.", nameof(value));
+        }
+
+        if (normalized.Length > MaxLength)
+        {
+            throw new ArgumentException($"Text must not exceed {MaxLength} characters.", nameof(value));
         }
 
         return new TextContent(value, normalized);

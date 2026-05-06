@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using ToxicAnalyzer.Application.Abstractions;
 using ToxicAnalyzer.Application.Auth;
@@ -13,26 +14,28 @@ public static class InfrastructureServiceCollectionExtensions
 {
     public static IServiceCollection AddModelServiceInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(environment);
 
         services
             .AddOptions<ModelServiceOptions>()
             .Bind(configuration.GetSection(ModelServiceOptions.SectionName))
-            .Validate(
-                options => Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out _),
-                $"{ModelServiceOptions.SectionName}:BaseUrl must be an absolute URL.")
-            .Validate(
-                options => options.Timeout > TimeSpan.Zero,
-                $"{ModelServiceOptions.SectionName}:Timeout must be greater than zero.")
             .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<ModelServiceOptions>>(new ModelServiceOptionsValidator(environment));
+        services.AddSingleton<ModelServiceConcurrencyGate>();
+        services.AddTransient<ModelServiceAuthenticationHandler>();
+        services.AddTransient<ModelServiceConcurrencyHandler>();
 
         services.AddHttpClient<IModelPredictionClient, ModelServiceClient>((serviceProvider, httpClient) =>
         {
             ConfigureHttpClient(serviceProvider, httpClient);
-        });
+        })
+            .AddHttpMessageHandler<ModelServiceAuthenticationHandler>()
+            .AddHttpMessageHandler<ModelServiceConcurrencyHandler>();
 
         services.AddHttpClient<ModelServiceHealthCheck>((serviceProvider, httpClient) =>
         {
@@ -87,9 +90,10 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddSingleton(new AnalysisCaptureQueue(options.QueueCapacity));
         services.AddSingleton<IAnalysisCaptureScheduler, AnalysisCaptureChannelScheduler>();
-        services.AddSingleton<PostgresAnalysisTextStore>();
-        services.AddSingleton<IAnalysisTextStore>(serviceProvider => serviceProvider.GetRequiredService<PostgresAnalysisTextStore>());
-        services.AddSingleton<IAnalysisTextVotingRepository>(serviceProvider => serviceProvider.GetRequiredService<PostgresAnalysisTextStore>());
+        services.AddSingleton<AnalysisCaptureDbConnectionFactory>();
+        services.AddSingleton<AnalysisCaptureSchemaInitializer>();
+        services.AddSingleton<IAnalysisTextStore, PostgresAnalysisCaptureStore>();
+        services.AddSingleton<IAnalysisTextVotingRepository, PostgresAnalysisTextVotingRepository>();
         services.AddHostedService<AnalysisCaptureBackgroundService>();
 
         return services;
@@ -97,25 +101,26 @@ public static class InfrastructureServiceCollectionExtensions
 
     public static IServiceCollection AddAuthInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(environment);
 
         services
             .AddOptions<AuthOptions>()
             .Bind(configuration.GetSection(AuthOptions.SectionName))
-            .Validate(options => !string.IsNullOrWhiteSpace(options.Issuer), $"{AuthOptions.SectionName}:Issuer is required.")
-            .Validate(options => !string.IsNullOrWhiteSpace(options.Audience), $"{AuthOptions.SectionName}:Audience is required.")
-            .Validate(options => !string.IsNullOrWhiteSpace(options.SigningKey) && options.SigningKey.Length >= 32, $"{AuthOptions.SectionName}:SigningKey must be at least 32 characters.")
-            .Validate(options => options.BrowserSessionLifetime > TimeSpan.Zero, $"{AuthOptions.SectionName}:BrowserSessionLifetime must be greater than zero.")
-            .Validate(options => options.ServiceAccessTokenLifetime > TimeSpan.Zero, $"{AuthOptions.SectionName}:ServiceAccessTokenLifetime must be greater than zero.")
             .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<AuthOptions>>(new AuthOptionsValidator(environment));
 
         services.AddSingleton(serviceProvider => serviceProvider.GetRequiredService<IOptions<AuthOptions>>().Value);
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
         services.AddSingleton<ISessionTokenService, SessionTokenService>();
         services.AddSingleton<IAccessTokenIssuer, JwtAccessTokenIssuer>();
+        services.AddSingleton<IAuthenticationAttemptLimiter, InMemoryAuthenticationAttemptLimiter>();
+        services.AddSingleton<AuthDbConnectionFactory>();
+        services.AddSingleton<AuthSchemaInitializer>();
         services.AddSingleton<IAuthStore, PostgresAuthStore>();
         services.AddHostedService<DevelopmentAdminBootstrapHostedService>();
 

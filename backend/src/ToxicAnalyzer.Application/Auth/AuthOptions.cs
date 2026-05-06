@@ -30,6 +30,18 @@ public sealed class AuthOptions
 
     public TimeSpan ServiceAccessTokenLifetime { get; set; } = TimeSpan.FromMinutes(15);
 
+    public int LoginMaxFailedAttempts { get; set; } = 5;
+
+    public TimeSpan LoginFailureWindow { get; set; } = TimeSpan.FromMinutes(15);
+
+    public TimeSpan LoginLockoutDuration { get; set; } = TimeSpan.FromMinutes(10);
+
+    public int ServiceTokenMaxFailedAttempts { get; set; } = 5;
+
+    public TimeSpan ServiceTokenFailureWindow { get; set; } = TimeSpan.FromMinutes(15);
+
+    public TimeSpan ServiceTokenLockoutDuration { get; set; } = TimeSpan.FromMinutes(10);
+
     public string? BootstrapAdminEmail { get; set; }
 
     public string? BootstrapAdminPassword { get; set; }

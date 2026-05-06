@@ -16,6 +16,16 @@ public sealed class ToxicityDomainTests
     }
 
     [Fact]
+    public void TextContent_Create_RejectsOversizedText()
+    {
+        var oversized = new string('a', TextContent.MaxLength + 1);
+
+        var exception = Assert.Throws<ArgumentException>(() => TextContent.Create(oversized));
+
+        Assert.Contains("must not exceed", exception.Message);
+    }
+
+    [Fact]
     public void AnalysisBatch_Create_ComputesSummaryAndPreservesClientIds()
     {
         var createdAt = new DateTimeOffset(2026, 4, 29, 12, 0, 0, TimeSpan.Zero);

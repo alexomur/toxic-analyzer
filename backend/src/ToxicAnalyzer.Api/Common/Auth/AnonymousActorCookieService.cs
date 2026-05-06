@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using ToxicAnalyzer.Application.Auth;
 
@@ -13,13 +14,16 @@ public sealed class AnonymousActorCookieService : IAnonymousActorCookieService
 {
     private readonly IDataProtector _protector;
     private readonly AuthOptions _options;
+    private readonly IHostEnvironment _environment;
 
     public AnonymousActorCookieService(
         IDataProtectionProvider dataProtectionProvider,
-        IOptions<AuthOptions> options)
+        IOptions<AuthOptions> options,
+        IHostEnvironment environment)
     {
         _protector = dataProtectionProvider.CreateProtector("ToxicAnalyzer.Api.AnonymousActor");
         _options = options.Value;
+        _environment = environment;
     }
 
     public string GetOrCreateAnonymousActorId(HttpContext httpContext)
@@ -46,7 +50,7 @@ public sealed class AnonymousActorCookieService : IAnonymousActorCookieService
             HttpOnly = true,
             IsEssential = true,
             SameSite = SameSiteMode.Lax,
-            Secure = httpContext.Request.IsHttps
+            Secure = !_environment.IsDevelopment() || httpContext.Request.IsHttps
         };
     }
 

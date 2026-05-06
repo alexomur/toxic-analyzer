@@ -29,9 +29,9 @@ public sealed class PostgresAnalysisTextStoreTests
     }
 
     [Fact]
-    public void BuildGetRandomSql_IncludesSelfAndBotSubmittedOrigins()
+    public void BuildGetRandomSql_IncludesOnlyTrustedOrigins()
     {
-        var method = typeof(PostgresAnalysisTextStore).GetMethod(
+        var method = typeof(PostgresAnalysisTextVotingRepository).GetMethod(
             "BuildGetRandomSql",
             BindingFlags.NonPublic | BindingFlags.Static);
 
@@ -39,7 +39,8 @@ public sealed class PostgresAnalysisTextStoreTests
 
         var sql = Assert.IsType<string>(method!.Invoke(null, ["public"]));
 
-        Assert.Contains("'self_submitted'", sql);
+        Assert.DoesNotContain("'self_submitted'", sql);
         Assert.Contains("'bot_submitted'", sql);
+        Assert.Contains("'random_pool'", sql);
     }
 }

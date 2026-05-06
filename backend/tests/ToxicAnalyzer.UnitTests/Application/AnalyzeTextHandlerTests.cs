@@ -1,4 +1,5 @@
 using ToxicAnalyzer.Application.Abstractions;
+using ToxicAnalyzer.Application.Auth;
 using ToxicAnalyzer.Application.Common;
 using ToxicAnalyzer.Application.Toxicity.AnalyzeText;
 using ToxicAnalyzer.Domain.Analysis;
@@ -18,7 +19,7 @@ public sealed class AnalyzeTextHandlerTests
             CancellationToken.None);
 
         Assert.False(string.IsNullOrWhiteSpace(result.AnalysisId));
-        Assert.Equal(fixture.AnalysisTextVotingRepository.EnsuredVoteableTextId?.ToString(), result.TextId);
+        Assert.Null(result.TextId);
         Assert.Equal(1, result.Label);
         Assert.Equal(0.91m, result.ToxicProbability);
         Assert.Equal("baseline-a", result.Model.ModelKey);
@@ -26,9 +27,7 @@ public sealed class AnalyzeTextHandlerTests
         Assert.Equal(AnalyzeTextReportLevel.Summary, result.ReportLevel);
         Assert.Null(result.Explanation);
         Assert.Equal(fixture.Clock.UtcNow, result.CreatedAt);
-        Assert.Single(fixture.AnalysisTextVotingRepository.EnsuredVoteableTexts);
-        Assert.Equal(AnalysisTextOrigin.SelfSubmitted, fixture.AnalysisTextVotingRepository.EnsuredVoteableTexts[0].Origin);
-        Assert.Equal("You are awful", fixture.AnalysisTextVotingRepository.EnsuredVoteableTexts[0].Analysis.Text.Original);
+        Assert.Empty(fixture.AnalysisTextVotingRepository.EnsuredVoteableTexts);
     }
 
     [Fact]
@@ -120,5 +119,30 @@ public sealed class AnalyzeTextHandlerTests
             CancellationToken.None));
 
         Assert.Empty(fixture.AnalysisTextVotingRepository.EnsuredVoteableTexts);
+    }
+
+    [Fact]
+    public async Task HandleAsync_StoresTrustedServiceSubmissionsOnly()
+    {
+        var fixture = TestFixture.Create();
+        fixture.CurrentActorAccessor.CurrentActor = new CurrentActor(
+            true,
+            ActorType.Service,
+            "discord-bot-1",
+            "discord-bot",
+            null,
+            null,
+            "Bearer",
+            [],
+            [],
+            [AuthCapabilities.AnalysisSubmit]);
+
+        var result = await fixture.AnalyzeTextHandler.HandleAsync(
+            new AnalyzeTextCommand("Trusted bot text"),
+            CancellationToken.None);
+
+        Assert.Equal(fixture.AnalysisTextVotingRepository.EnsuredVoteableTextId?.ToString(), result.TextId);
+        Assert.Single(fixture.AnalysisTextVotingRepository.EnsuredVoteableTexts);
+        Assert.Equal(AnalysisTextOrigin.BotSubmitted, fixture.AnalysisTextVotingRepository.EnsuredVoteableTexts[0].Origin);
     }
 }
