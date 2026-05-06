@@ -301,7 +301,14 @@ public sealed class PostgresAnalysisTextStore : IAnalysisTextStore, IAnalysisTex
             FROM vote_totals
             GROUP BY text_id
         ) AS vote_totals ON vote_totals.text_id = text.id
-        WHERE text.source_kind IN ('{{RandomPoolOrigin}}', 'anonymous', 'user', 'admin', 'service')
+        WHERE text.source_kind IN (
+            '{{RandomPoolOrigin}}',
+            'self_submitted',
+            'bot_submitted',
+            'anonymous',
+            'user',
+            'admin',
+            'service')
         ORDER BY (-LN(GREATEST(random(), 1e-12)) * (COALESCE(vote_totals.votes_toxic, 0) + COALESCE(vote_totals.votes_non_toxic, 0) + 1))
         LIMIT 1;
         """;

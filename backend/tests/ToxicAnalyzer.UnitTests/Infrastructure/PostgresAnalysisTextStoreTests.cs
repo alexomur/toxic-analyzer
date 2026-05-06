@@ -1,4 +1,5 @@
 using ToxicAnalyzer.Infrastructure.AnalysisCapture;
+using System.Reflection;
 
 namespace ToxicAnalyzer.UnitTests.Infrastructure;
 
@@ -25,5 +26,20 @@ public sealed class PostgresAnalysisTextStoreTests
         var normalized = AnalysisCaptureConnectionString.Normalize(input);
 
         Assert.Equal(input, normalized);
+    }
+
+    [Fact]
+    public void BuildGetRandomSql_IncludesSelfAndBotSubmittedOrigins()
+    {
+        var method = typeof(PostgresAnalysisTextStore).GetMethod(
+            "BuildGetRandomSql",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.NotNull(method);
+
+        var sql = Assert.IsType<string>(method!.Invoke(null, ["public"]));
+
+        Assert.Contains("'self_submitted'", sql);
+        Assert.Contains("'bot_submitted'", sql);
     }
 }
