@@ -65,6 +65,10 @@ Improved precision on reviewed Habr-like slices after a deeper label cleanup.
 
 Improved overall quality and especially `dvach`-related performance after a full mismatch review and retraining pass. This is the current baseline line referenced by the runtime and default artifact names.
 
+### V3.4
+
+Removed the `OBSCENITY` slice from the training base and retrained the same baseline pipeline on the pruned dataset. The architecture stayed the same; the iteration is data-quality-driven and now becomes the default runtime artifact line.
+
 ## Main takeaway
 
 The strongest improvements so far came from improving labels and review workflow, not from replacing the baseline architecture. The next useful iteration should start from fresh mismatch analysis on top of the current baseline rather than from ad hoc feature growth.

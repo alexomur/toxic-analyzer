@@ -179,7 +179,13 @@ class ToxicityBaselineModel:
         return None
 
     def _supports_v3_adjustments(self) -> bool:
-        return str(self.metadata.get("model_version", "")).lower() in {"v3", "v3.1", "v3.2", "v3.3"}
+        return str(self.metadata.get("model_version", "")).lower() in {
+            "v3",
+            "v3.1",
+            "v3.2",
+            "v3.3",
+            "v3.4",
+        }
 
     def _get_feature_value_map(
         self,
@@ -745,7 +751,7 @@ def train_baseline_model(
             "training_config": training_config.to_summary(),
             "threshold_selection": threshold_info,
             "calibration_method": calibrator.method_name,
-            "model_version": "v3.3",
+            "model_version": "v3.4",
             "posthoc_adjustments": {
                 "short_untargeted_harm": {
                     "base_delta": -0.18,
@@ -762,7 +768,7 @@ def train_baseline_model(
         "training_config": training_config.to_summary(),
         "threshold_selection": threshold_info,
         "calibration_method": calibrator.method_name,
-        "model_version": "v3.3",
+        "model_version": "v3.4",
         "posthoc_adjustments": model.metadata["posthoc_adjustments"],
         "metrics": {
             "train": compute_split_metrics(dataset_bundle.train, model),

@@ -44,7 +44,7 @@ def test_main_prints_single_prediction_payload(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     def fake_from_path(cls: type[ToxicityInferenceService], model_path: object) -> StubService:
-        assert str(model_path).endswith("baseline_model_v3_3.pkl")
+        assert str(model_path).endswith("baseline_model_v3_4.pkl")
         return StubService()
 
     monkeypatch.setattr(
@@ -71,7 +71,7 @@ def test_main_prints_batch_prediction_payload(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     def fake_from_path(cls: type[ToxicityInferenceService], model_path: object) -> StubService:
-        assert str(model_path).endswith("baseline_model_v3_3.pkl")
+        assert str(model_path).endswith("baseline_model_v3_4.pkl")
         return StubService()
 
     monkeypatch.setattr(

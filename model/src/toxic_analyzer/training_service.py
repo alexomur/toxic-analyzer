@@ -26,8 +26,8 @@ from toxic_analyzer.training_data import (
 ROOT_DIR = MODEL_ROOT
 DEFAULT_HARD_CASE_DATASET_PATH = ROOT_DIR / "configs" / "baseline_hard_cases_v3.jsonl"
 DEFAULT_SEED_DATASET_PATH = ROOT_DIR / "configs" / "baseline_seed_examples_v3.jsonl"
-DEFAULT_MODEL_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_model_v3_3.pkl"
-DEFAULT_REPORT_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_training_report_v3_3.json"
+DEFAULT_MODEL_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_model_v3_4.pkl"
+DEFAULT_REPORT_OUTPUT_PATH = ROOT_DIR / "artifacts" / "baseline_training_report_v3_4.json"
 DEFAULT_RETRAIN_ARTIFACTS_DIR = ROOT_DIR / "artifacts" / "retrain"
 
 

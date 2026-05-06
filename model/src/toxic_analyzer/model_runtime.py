@@ -9,8 +9,9 @@ from toxic_analyzer.baseline_model import ToxicityBaselineModel
 from toxic_analyzer.paths import MODEL_ROOT
 
 ROOT_DIR: Final[Path] = MODEL_ROOT
-DEFAULT_MODEL_PATH: Final[Path] = ROOT_DIR / "artifacts" / "baseline_model_v3_3.pkl"
+DEFAULT_MODEL_PATH: Final[Path] = ROOT_DIR / "artifacts" / "baseline_model_v3_4.pkl"
 DEFAULT_FALLBACK_MODEL_PATHS: Final[tuple[Path, ...]] = (
+    ROOT_DIR / "artifacts" / "baseline_model_v3_3.pkl",
     ROOT_DIR / "artifacts" / "baseline_model_v3_2.pkl",
     ROOT_DIR / "artifacts" / "baseline_model_v3_1.pkl",
     ROOT_DIR / "artifacts" / "baseline_model_v3.pkl",
