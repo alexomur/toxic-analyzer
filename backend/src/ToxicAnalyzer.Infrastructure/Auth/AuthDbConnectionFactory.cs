@@ -4,7 +4,7 @@ using ToxicAnalyzer.Application.Auth;
 
 namespace ToxicAnalyzer.Infrastructure.Auth;
 
-public sealed class AuthDbConnectionFactory
+public class AuthDbConnectionFactory
 {
     private readonly AuthOptions _options;
 
@@ -13,7 +13,7 @@ public sealed class AuthDbConnectionFactory
         _options = options.Value;
     }
 
-    public async Task<NpgsqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
+    public virtual async Task<NpgsqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_options.ConnectionString))
         {

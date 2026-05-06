@@ -3,7 +3,7 @@ using Npgsql;
 
 namespace ToxicAnalyzer.Infrastructure.AnalysisCapture;
 
-public sealed class AnalysisCaptureDbConnectionFactory
+public class AnalysisCaptureDbConnectionFactory
 {
     private readonly string _normalizedConnectionString;
 
@@ -12,7 +12,7 @@ public sealed class AnalysisCaptureDbConnectionFactory
         _normalizedConnectionString = AnalysisCaptureConnectionString.Normalize(options.Value.ConnectionString);
     }
 
-    public async Task<NpgsqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
+    public virtual async Task<NpgsqlConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connection = new NpgsqlConnection(_normalizedConnectionString);
         await connection.OpenAsync(cancellationToken);
