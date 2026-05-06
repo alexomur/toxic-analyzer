@@ -91,7 +91,10 @@ def test_format_prediction_uses_human_readable_verdict() -> None:
 
 
 def test_format_explained_prediction_renders_technical_explanation() -> None:
-    rendered = format_explained_prediction("ты мудак", StubModel().predict_one_explained("ты мудак"))
+    rendered = format_explained_prediction(
+        "ты мудак",
+        StubModel().predict_one_explained("ты мудак"),
+    )
 
     assert "======\nraw_model_probability: 0.820000" in rendered
     assert "canonical_tokens: ты, мудак\n======" in rendered

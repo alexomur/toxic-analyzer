@@ -109,8 +109,14 @@ def test_build_explain_response_payload_uses_explained_prediction() -> None:
 
     assert payload["text"] == "ты идиот"
     assert payload["prediction"]["raw_model_probability"] == 0.81
-    assert payload["prediction"]["explanation"]["top_positive_features"][0]["feature_group"] == "word_ngram"
-    assert payload["prediction"]["explanation"]["applied_adjustments"][0]["adjustment_name"] == "second_person_negated_insult"
+    assert (
+        payload["prediction"]["explanation"]["top_positive_features"][0]["feature_group"]
+        == "word_ngram"
+    )
+    assert (
+        payload["prediction"]["explanation"]["applied_adjustments"][0]["adjustment_name"]
+        == "second_person_negated_insult"
+    )
 
 
 def test_get_model_info_exposes_runtime_metadata() -> None:

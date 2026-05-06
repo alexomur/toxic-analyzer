@@ -10,7 +10,10 @@ def test_expert_features_distinguish_targeted_insult_from_standalone_word() -> N
 
     assert matrix[0, feature_index["has_pronoun_insult"]] == 0.0
     assert matrix[1, feature_index["has_pronoun_insult"]] == 1.0
-    assert matrix[1, feature_index["second_person_count"]] > matrix[0, feature_index["second_person_count"]]
+    assert (
+        matrix[1, feature_index["second_person_count"]]
+        > matrix[0, feature_index["second_person_count"]]
+    )
 
 
 def test_expert_features_capture_dismissive_template() -> None:
