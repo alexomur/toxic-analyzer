@@ -74,7 +74,7 @@ interface CsvRecord {
 export function BatchAnalysisPage() {
   const [sourceMode, setSourceMode] = useState<SourceMode>('manual')
   const [manualText, setManualText] = useState(
-    'Спасибо за полезный ответ.\nТы полный идиот, лучше бы молчал.\nОбсуждение становится жёстким, но в нём всё ещё есть конструктивная часть.',
+    'Спасибо за полезный ответ.\nТы придурок, лучше бы молчал.\nОбсуждение становится жёстким, но в нём всё ещё есть конструктивная часть.',
   )
   const [importError, setImportError] = useState<string | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
